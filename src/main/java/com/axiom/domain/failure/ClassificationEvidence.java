@@ -1,0 +1,1 @@
+package com.axiom.domain.failure; import com.axiom.domain.evidence.EvidenceSeverity; public record ClassificationEvidence(String code,String description,FailureClassification category,EvidenceSeverity severity,EvidencePriority priority,double weight,String ruleId) {}

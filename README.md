@@ -71,6 +71,8 @@ curl http://localhost:8080/api/v1/pipeline-runs/<axiom-id>
 
 Stored log metadata is available at `/api/v1/pipeline-runs/<axiom-id>/logs`. CI logs can contain secrets, so raw-log access remains development-oriented until authentication/authorization is introduced.
 
+Process and diagnose a run deterministically (no AI): `POST /api/v1/pipeline-runs/<id>/process-logs`, then `POST /api/v1/pipeline-runs/<id>/diagnose`. Diagnoses expose evidence-backed categories and use `UNKNOWN` when evidence is insufficient.
+
 ## Project structure
 
 `domain` holds normalized concepts, `application` orchestration, `analysis` evidence/classification extensions, `integrations` provider adapters, `persistence` JPA mappings, and `api` transport concerns.
