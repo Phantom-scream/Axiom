@@ -26,6 +26,8 @@ public class ApiExceptionHandler {
     ResponseEntity<ApiError> illegalArgument(IllegalArgumentException exception, HttpServletRequest request) { return response(HttpStatus.BAD_REQUEST, exception.getMessage(), request); }
     @ExceptionHandler(PipelineRunNotFoundException.class)
     ResponseEntity<ApiError> notFound(PipelineRunNotFoundException e,HttpServletRequest r){return response(HttpStatus.NOT_FOUND,e.getMessage(),r,"PIPELINE_RUN_NOT_FOUND");}
+    @ExceptionHandler(ResourceNotFoundException.class)
+    ResponseEntity<ApiError> resourceNotFound(ResourceNotFoundException e,HttpServletRequest r){return response(HttpStatus.NOT_FOUND,e.getMessage(),r,"RESOURCE_NOT_FOUND");}
     @ExceptionHandler(GitHubAuthenticationException.class)
     ResponseEntity<ApiError> authentication(GitHubAuthenticationException e,HttpServletRequest r){return response(HttpStatus.UNAUTHORIZED,e.getMessage(),r,"GITHUB_AUTHENTICATION_FAILED");}
     @ExceptionHandler({GitHubPermissionException.class,GitHubRateLimitException.class})

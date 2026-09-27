@@ -8,7 +8,7 @@ CI failures are expensive to triage because their evidence is fragmented and pro
 
 ## Current scope
 
-This release adds GitHub Actions workflow-run ingestion: authenticated metadata/jobs/steps/log download, provider-neutral mapping, idempotent PostgreSQL persistence, rerun-attempt tracking, and stored-log checksums. It does **not** parse JUnit XML or make AI-driven diagnoses.
+Axiom ingests GitHub Actions runs and logs, extracts deterministic failure events, classifies them with explainable rules, and ingests framework-neutral JUnit XML. Structured failed tests are correlated to extracted failure events using conservative EXACT or STRONG evidence. Explicit workflow-attempt transitions support stability-v1 without treating unrelated runs or changed commits as unchanged reruns. The analysis remains deterministic and does not use AI.
 
 ## Architecture and stack
 
@@ -73,7 +73,9 @@ Stored log metadata is available at `/api/v1/pipeline-runs/<axiom-id>/logs`. CI 
 
 Process and diagnose a run deterministically (no AI): `POST /api/v1/pipeline-runs/<id>/process-logs`, then `POST /api/v1/pipeline-runs/<id>/diagnose`. Diagnoses expose evidence-backed categories and use `UNKNOWN` when evidence is insufficient.
 
-Historical test executions use stable IDs. `GET /api/v1/tests/<stableTestId>/history`, `/fingerprints`, and `/stability` expose deterministic rerun-aware foundations; failure rate alone never labels a test flaky.
+Upload JUnit XML with `POST /api/v1/pipeline-runs/<id>/test-reports?sourceName=results.xml`. Correlation is attempted automatically and can be repeated after log processing with `POST /api/v1/pipeline-runs/<id>/tests/correlate`.
+
+Historical test executions use stable IDs. `GET /api/v1/tests/<stableTestId>/history`, `/fingerprints`, `/reruns`, and `/stability` expose deterministic rerun-aware evidence; failure rate alone never labels a test flaky. Rerun transitions compare adjacent attempts of the same external workflow run and explicitly report whether the commit SHA is unchanged.
 
 Change relevance is deterministic evidence rather than proof of causation. Changed-file categories support future pipeline relevance analysis and distinguish source, tests, dependencies, CI, infrastructure, and documentation.
 

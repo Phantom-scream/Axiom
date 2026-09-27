@@ -15,6 +15,12 @@ flowchart LR
   I --> G[GitHubApiClient]
   G --> M[GitHubRunMapper]
   I --> L[LogStorage]
+  L --> FE[Failure events]
+  TR[JUnit XML reports] --> TE[Test executions]
+  FE --> TC[TestFailureCorrelationService]
+  TE --> TC
+  TE --> RA[RerunAnalysisService]
+  RA --> TS[TestStabilityService]
 ```
 
-`CiProvider` is the seam for GitHub Actions, GitLab CI, and Jenkins. The present GitHub class intentionally throws an explicit unsupported-operation exception: it is a shell, not simulated integration. Future direction is provider ingestion, durable analysis runs, pluggable fingerprinting, and correlation modules while retaining the same domain contract.
+`CiProvider` is the seam for CI integrations. Test correlation and rerun analysis operate only on provider-neutral persisted pipeline, failure, and test data. Correlation is durable derived state on each test execution; rerun transitions remain derived from raw executions and pipeline attempt metadata.
