@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${AXIOM_POSTGRES_DB:-axiom}
+      POSTGRES_USER: ${AXIOM_DB_USERNAME:-axiom}
+      POSTGRES_PASSWORD: ${AXIOM_DB_PASSWORD:-axiom}
+    ports:
+      - "${AXIOM_DB_PORT:-5432}:5432"
+    volumes:
+      - axiom-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  axiom-postgres-data:

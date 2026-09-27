@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: axiom
+  datasource:
+    url: ${AXIOM_DB_URL:jdbc:postgresql://localhost:5432/axiom}
+    username: ${AXIOM_DB_USERNAME:axiom}
+    password: ${AXIOM_DB_PASSWORD:axiom}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+info:
+  app:
+    name: Axiom
+    version: ${AXIOM_VERSION:0.1.0-SNAPSHOT}
+axiom:
+  github:
+    token: ${AXIOM_GITHUB_TOKEN:}
+    base-url: ${AXIOM_GITHUB_BASE_URL:https://api.github.com}
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%X{correlationId:-}] %logger{36} - %msg%n"

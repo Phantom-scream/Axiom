@@ -1,0 +1,6 @@
+package com.axiom.integrations.github;
+import com.axiom.domain.pipeline.*; import com.axiom.integrations.github.dto.*; import com.axiom.integrations.github.mapper.GitHubRunMapper; import java.time.Instant; import java.util.List; import org.junit.jupiter.api.Test; import static org.assertj.core.api.Assertions.assertThat;
+class GitHubRunMapperTest {
+ @Test void mapsUnknownConclusionSafelyAndPreservesAttempt(){var mapper=new GitHubRunMapper();var dto=new GitHubWorkflowRunDto(42,"completed","unexpected_value","sha","main",2,Instant.EPOCH,Instant.EPOCH,null,List.of(new GitHubPullRequestRefDto(9L)));var run=mapper.run(dto,"owner","repo",List.of());assertThat(run.conclusion()).isEqualTo(PipelineConclusion.UNKNOWN);assertThat(run.attempt()).isEqualTo(2);assertThat(run.pullRequestNumber()).isEqualTo(9);}
+ @Test void mapsJobsAndSteps(){var mapper=new GitHubRunMapper();var job=mapper.job(new GitHubJobDto(7,"test","completed","failure","runner",Instant.EPOCH,Instant.EPOCH,List.of(new GitHubStepDto(1,"run","completed","success",Instant.EPOCH,Instant.EPOCH))));assertThat(job.externalJobId()).isEqualTo(7);assertThat(job.steps()).hasSize(1);assertThat(job.conclusion()).isEqualTo(PipelineConclusion.FAILURE);}
+}
