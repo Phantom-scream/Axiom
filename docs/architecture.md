@@ -21,6 +21,14 @@ flowchart LR
   TE --> TC
   TE --> RA[RerunAnalysisService]
   RA --> TS[TestStabilityService]
+  API --> GI[GitChangeIngestionService]
+  GI --> GR[GitChangeReferenceResolver]
+  GI --> GP[GitChangeProvider]
+  GP --> GC[GitHub Compare API]
+  GI --> CF[ChangedFileClassifier]
+  GI --> GDB[(git_change_sets / changed_files)]
 ```
 
-`CiProvider` is the seam for CI integrations. Test correlation and rerun analysis operate only on provider-neutral persisted pipeline, failure, and test data. Correlation is durable derived state on each test execution; rerun transitions remain derived from raw executions and pipeline attempt metadata.
+`CiProvider` is the seam for CI run integrations; `GitChangeProvider` is the separate provider-neutral seam for source changes. GitHub DTOs remain at the integration edge. `GitChangeIngestionService` resolves persisted base/head metadata, invokes the matching provider, classifies normalized files, and idempotently replaces V7 changed-file rows. Retrieval never calls GitHub implicitly.
+
+Test correlation and rerun analysis operate only on provider-neutral persisted pipeline, failure, and test data. Correlation is durable derived state on each test execution; rerun transitions remain derived from raw executions and pipeline attempt metadata.

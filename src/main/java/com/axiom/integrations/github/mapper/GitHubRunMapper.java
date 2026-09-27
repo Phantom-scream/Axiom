@@ -9,8 +9,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class GitHubRunMapper {
     public PipelineRun run(GitHubWorkflowRunDto source, String owner, String repository, List<PipelineJob> jobs) {
-        Long pr = source.pullRequests() == null || source.pullRequests().isEmpty() ? null : source.pullRequests().getFirst().number();
-        return new PipelineRun(UUID.randomUUID(), CiProviderType.GITHUB_ACTIONS, source.id(), owner, repository, source.headSha(), source.headBranch(), pr, status(source.status()), conclusion(source.conclusion()), Math.max(1, source.runAttempt()), source.createdAt(), source.updatedAt(), jobs);
+        GitHubPullRequestRefDto pullRequest = source.pullRequests() == null || source.pullRequests().isEmpty() ? null : source.pullRequests().getFirst();
+        Long pr = pullRequest == null ? null : pullRequest.number();
+        String baseSha = pullRequest == null || pullRequest.base() == null ? null : pullRequest.base().sha();
+        String headSha = pullRequest == null || pullRequest.head() == null || pullRequest.head().sha() == null ? source.headSha() : pullRequest.head().sha();
+        return new PipelineRun(UUID.randomUUID(), CiProviderType.GITHUB_ACTIONS, source.id(), owner, repository, headSha, baseSha, source.event(), source.headBranch(), pr, status(source.status()), conclusion(source.conclusion()), Math.max(1, source.runAttempt()), source.createdAt(), source.updatedAt(), jobs);
     }
     public PipelineJob job(GitHubJobDto source) {
         List<PipelineStep> steps = source.steps() == null ? List.of() : source.steps().stream().map(this::step).toList();

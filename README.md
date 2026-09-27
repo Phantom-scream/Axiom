@@ -8,7 +8,7 @@ CI failures are expensive to triage because their evidence is fragmented and pro
 
 ## Current scope
 
-Axiom ingests GitHub Actions runs and logs, extracts deterministic failure events, classifies them with explainable rules, and ingests framework-neutral JUnit XML. Structured failed tests are correlated to extracted failure events using conservative EXACT or STRONG evidence. Explicit workflow-attempt transitions support stability-v1 without treating unrelated runs or changed commits as unchanged reruns. The analysis remains deterministic and does not use AI.
+Axiom ingests GitHub Actions runs and logs, extracts deterministic failure events, classifies them with explainable rules, and ingests framework-neutral JUnit XML. Structured failed tests are correlated to extracted failure events using conservative EXACT or STRONG evidence. Explicit workflow-attempt transitions support stability-v1 without treating unrelated runs or changed commits as unchanged reruns. GitHub Compare ingestion persists provider-neutral, categorized changed files without storing patches. The analysis remains deterministic and does not use AI.
 
 ## Architecture and stack
 
@@ -33,7 +33,7 @@ Run the application with local defaults:
 ./gradlew bootRun --args='--spring.profiles.active=local'
 ```
 
-The local defaults are `jdbc:postgresql://localhost:5432/axiom`, username `axiom`, and password `axiom`. Override them with `AXIOM_DB_URL`, `AXIOM_DB_USERNAME`, and `AXIOM_DB_PASSWORD`. `AXIOM_GITHUB_TOKEN` is optional and unused until the GitHub adapter is implemented.
+The local defaults are `jdbc:postgresql://localhost:5432/axiom`, username `axiom`, and password `axiom`. Override them with `AXIOM_DB_URL`, `AXIOM_DB_USERNAME`, and `AXIOM_DB_PASSWORD`.
 
 Set `AXIOM_GITHUB_TOKEN` before requesting GitHub ingestion. Use a fine-grained token with read access to Actions and repository metadata; private repositories require access to that repository. Tokens are never logged.
 
@@ -77,16 +77,21 @@ Upload JUnit XML with `POST /api/v1/pipeline-runs/<id>/test-reports?sourceName=r
 
 Historical test executions use stable IDs. `GET /api/v1/tests/<stableTestId>/history`, `/fingerprints`, `/reruns`, and `/stability` expose deterministic rerun-aware evidence; failure rate alone never labels a test flaky. Rerun transitions compare adjacent attempts of the same external workflow run and explicitly report whether the commit SHA is unchanged.
 
+For runs with reliable persisted base/head metadata, ingest and retrieve normalized Git changes:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/pipeline-runs/<id>/changes/ingest
+curl http://localhost:8080/api/v1/pipeline-runs/<id>/changes
+```
+
+The POST explicitly calls GitHub; GET reads only PostgreSQL. Pull-request workflow metadata supplies base/head SHAs for future ingestions. Runs without a reliable base SHA return a controlled validation error rather than assuming a branch or parent commit. See [Git change ingestion](docs/git-change-ingestion.md).
+
 Change relevance is deterministic evidence rather than proof of causation. Changed-file categories support future pipeline relevance analysis and distinguish source, tests, dependencies, CI, infrastructure, and documentation.
 
 ## Project structure
 
 `domain` holds normalized concepts, `application` orchestration, `analysis` evidence/classification extensions, `integrations` provider adapters, `persistence` JPA mappings, and `api` transport concerns.
 
-## Roadmap
-
-Next: authenticated GitHub Actions ingestion, safe log retrieval, normalized persistence mapping, test-report ingestion, real evidence rules, fingerprints, and historical correlation.
-
 ## Security notes
 
-Secrets are supplied only through environment variables and are never logged. This version does not execute downloaded artifacts or expose filesystem access. The demo endpoint accepts bounded text only; external CI access is not enabled.
+Secrets are supplied only through environment variables and are never logged. Axiom does not persist Compare API patches or execute repository content. The demo endpoint accepts bounded text only.

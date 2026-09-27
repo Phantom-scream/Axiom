@@ -13,7 +13,7 @@ class FlywayMigrationIntegrationTest extends IntegrationTestSupport {
             var result = statement.executeQuery(); result.next(); assertThat(result.getInt(1)).isEqualTo(1);
         }
     }
-    @Test void migrationsReachV8WithCorrelationColumns() throws Exception {
+    @Test void migrationsReachV9WithCorrelationAndComparisonMetadata() throws Exception {
         try (var connection = dataSource.getConnection();
                 var versionStatement = connection.prepareStatement(
                         "select max(version::integer) from flyway_schema_history where success");
@@ -25,10 +25,20 @@ class FlywayMigrationIntegrationTest extends IntegrationTestSupport {
                         """)) {
             var version = versionStatement.executeQuery();
             version.next();
-            assertThat(version.getInt(1)).isEqualTo(8);
+            assertThat(version.getInt(1)).isEqualTo(9);
             var columns = columnStatement.executeQuery();
             columns.next();
             assertThat(columns.getInt(1)).isEqualTo(2);
+            try (var metadataStatement = connection.prepareStatement(
+                    """
+                    select count(*) from information_schema.columns
+                    where table_name='pipeline_runs'
+                      and column_name in ('base_sha','event_name')
+                    """)) {
+                var metadataColumns = metadataStatement.executeQuery();
+                metadataColumns.next();
+                assertThat(metadataColumns.getInt(1)).isEqualTo(2);
+            }
         }
     }
 }
