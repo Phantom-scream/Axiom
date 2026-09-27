@@ -75,6 +75,8 @@ Process and diagnose a run deterministically (no AI): `POST /api/v1/pipeline-run
 
 Historical test executions use stable IDs. `GET /api/v1/tests/<stableTestId>/history`, `/fingerprints`, and `/stability` expose deterministic rerun-aware foundations; failure rate alone never labels a test flaky.
 
+Change relevance is deterministic evidence rather than proof of causation. Changed-file categories support future pipeline relevance analysis and distinguish source, tests, dependencies, CI, infrastructure, and documentation.
+
 ## Project structure
 
 `domain` holds normalized concepts, `application` orchestration, `analysis` evidence/classification extensions, `integrations` provider adapters, `persistence` JPA mappings, and `api` transport concerns.
