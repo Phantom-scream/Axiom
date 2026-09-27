@@ -1,0 +1,2 @@
+2026-09-27T11:21:03.382Z ##[error]java.net.ConnectException: Connection refused localhost:5432
+	at service.Database.connect(Database.java:91)

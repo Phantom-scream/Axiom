@@ -1,0 +1,1 @@
+package com.axiom.domain.failure; public record FailureEvent(FailureEventType type,String exceptionType,String rawMessage,String normalizedMessage,String stackTrace,String normalizedStackRoot,String fingerprint,int occurrences,int firstLine,int lastLine) {}
