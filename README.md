@@ -73,6 +73,8 @@ Stored log metadata is available at `/api/v1/pipeline-runs/<axiom-id>/logs`. CI 
 
 Process and diagnose a run deterministically (no AI): `POST /api/v1/pipeline-runs/<id>/process-logs`, then `POST /api/v1/pipeline-runs/<id>/diagnose`. Diagnoses expose evidence-backed categories and use `UNKNOWN` when evidence is insufficient.
 
+Historical test executions use stable IDs. `GET /api/v1/tests/<stableTestId>/history`, `/fingerprints`, and `/stability` expose deterministic rerun-aware foundations; failure rate alone never labels a test flaky.
+
 ## Project structure
 
 `domain` holds normalized concepts, `application` orchestration, `analysis` evidence/classification extensions, `integrations` provider adapters, `persistence` JPA mappings, and `api` transport concerns.
