@@ -1,0 +1,1 @@
+package com.axiom.domain.test; import java.util.List; public record TestReport(String frameworkHint,String sourceName,List<TestSuite> suites){public TestReport{suites=List.copyOf(suites);}public int total(){return suites.stream().mapToInt(s->s.testCases().size()).sum();}}

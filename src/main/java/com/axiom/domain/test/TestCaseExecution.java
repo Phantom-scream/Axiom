@@ -1,0 +1,1 @@
+package com.axiom.domain.test; public record TestCaseExecution(String stableTestId,String className,String testName,String suiteName,TestStatus status,long durationMs,String failureType,String failureMessage,String normalizedFailureMessage,String stackTrace,String failureFingerprint) {}
