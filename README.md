@@ -35,7 +35,7 @@ Run the application with local defaults:
 
 The local defaults are `jdbc:postgresql://localhost:5432/axiom`, username `axiom`, and password `axiom`. Override them with `AXIOM_DB_URL`, `AXIOM_DB_USERNAME`, and `AXIOM_DB_PASSWORD`.
 
-Set `AXIOM_GITHUB_TOKEN` before requesting GitHub ingestion. Use a fine-grained token with read access to Actions and repository metadata; private repositories require access to that repository. Tokens are never logged.
+Set `AXIOM_GITHUB_TOKEN` before requesting GitHub ingestion. Use a fine-grained token with read access to Actions and repository metadata; private repositories require access to that repository. Explicit GitHub Check publishing additionally requires Checks write permission. Read-only analysis remains available without write permission, and tokens are never logged.
 
 ## Tests
 
@@ -108,10 +108,26 @@ curl http://localhost:8080/api/v1/pipeline-runs/<id>/rerun-recommendation
 
 POST recomputes and atomically replaces derived triage-v1 state. GET endpoints read persisted state only. A primary failure is the best-supported investigation priority, not a proven root cause. Rerun guidance never executes a workflow. See [pipeline triage](docs/pipeline-triage.md) and [rerun recommendations](docs/rerun-recommendation.md).
 
+Run every applicable persisted analysis stage through one coordinating endpoint:
+
+```bash
+curl -X POST 'http://localhost:8080/api/v1/pipeline-runs/<id>/analyze?recompute=false'
+```
+
+The response reports `COMPLETED`, `REUSED`, `SKIPPED_NO_DATA`, `SKIPPED_NOT_APPLICABLE`, or `FAILED` for each stage. By default, current versioned results are reused; `recompute=true` invokes the existing idempotent stage services. Missing test reports or Git comparison metadata do not prevent partial-evidence triage, and a failed optional stage is returned explicitly rather than hidden. See [end-to-end analysis](docs/end-to-end-analysis.md).
+
+After triage exists, publish it explicitly as a neutral GitHub Check:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/pipeline-runs/<id>/publish/github-check
+```
+
+The check is named `Axiom CI Intelligence`, targets the run's persisted head SHA, and contains bounded deterministic triage rather than raw logs or stack traces. Repeated publishing updates the tracked Check Run instead of creating unbounded duplicates. Normal analysis never publishes. See [GitHub Checks](docs/github-checks.md).
+
 ## Project structure
 
 `domain` holds normalized concepts, `application` orchestration, `analysis` evidence/classification extensions, `integrations` provider adapters, `persistence` JPA mappings, and `api` transport concerns.
 
 ## Security notes
 
-Secrets are supplied only through environment variables and are never logged. Axiom does not persist Compare API patches or execute repository content. The demo endpoint accepts bounded text only.
+Secrets are supplied only through environment variables and are never logged. Axiom does not persist Compare API patches, publish raw CI logs, or execute repository content. GitHub Check Markdown is escaped and bounded. The demo endpoint accepts bounded text only.

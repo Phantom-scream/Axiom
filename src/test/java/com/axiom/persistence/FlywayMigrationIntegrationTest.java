@@ -13,7 +13,7 @@ class FlywayMigrationIntegrationTest extends IntegrationTestSupport {
             var result = statement.executeQuery(); result.next(); assertThat(result.getInt(1)).isEqualTo(1);
         }
     }
-    @Test void migrationsReachV11WithRelevanceAndTriageDerivedState() throws Exception {
+    @Test void migrationsReachV12WithAnalysisAndPublicationState() throws Exception {
         try (var connection = dataSource.getConnection();
                 var versionStatement = connection.prepareStatement(
                         "select max(version::integer) from flyway_schema_history where success");
@@ -25,7 +25,7 @@ class FlywayMigrationIntegrationTest extends IntegrationTestSupport {
                         """)) {
             var version = versionStatement.executeQuery();
             version.next();
-            assertThat(version.getInt(1)).isEqualTo(11);
+            assertThat(version.getInt(1)).isEqualTo(12);
             var columns = columnStatement.executeQuery();
             columns.next();
             assertThat(columns.getInt(1)).isEqualTo(2);
@@ -56,6 +56,12 @@ class FlywayMigrationIntegrationTest extends IntegrationTestSupport {
                 var triageTables = triageStatement.executeQuery();
                 triageTables.next();
                 assertThat(triageTables.getInt(1)).isEqualTo(2);
+            }
+            try (var publicationStatement = connection.prepareStatement(
+                    "select count(*) from information_schema.tables where table_name='github_publications'")) {
+                var publicationTables = publicationStatement.executeQuery();
+                publicationTables.next();
+                assertThat(publicationTables.getInt(1)).isEqualTo(1);
             }
         }
     }
