@@ -35,6 +35,15 @@ flowchart LR
   FCC --> CR[ChangeRelevanceService v1]
   CR --> RDB[(relevance results / evidence / related files)]
   RDB --> API
+  FE --> PT[PipelineTriageApplicationService]
+  D --> PT
+  TC --> PT
+  RA --> PT
+  RDB --> PT
+  PT --> PE[PipelineTriageService v1]
+  PE --> DA[DeveloperActionService]
+  DA --> TDB[(triage results / rankings / evidence / actions)]
+  TDB --> API
 ```
 
 `CiProvider` is the seam for CI run integrations; `GitChangeProvider` is the separate provider-neutral seam for source changes. GitHub DTOs remain at the integration edge. `GitChangeIngestionService` resolves persisted base/head metadata, invokes the matching provider, classifies normalized files, and idempotently replaces V7 changed-file rows. Retrieval never calls GitHub implicitly.
@@ -42,3 +51,5 @@ flowchart LR
 Test correlation and rerun analysis operate only on provider-neutral persisted pipeline, failure, and test data. Correlation is durable derived state on each test execution; rerun transitions remain derived from raw executions and pipeline attempt metadata.
 
 `FailureChangeContextService` assembles bounded, persisted evidence for one failure: its optional diagnosis, correlated test and test history, explicit rerun transitions, prior same-fingerprint occurrences, and the current normalized change set. `PipelineChangeAnalysisService` invokes the existing deterministic v1 scorer for every failure and idempotently persists the result, evidence, and related-file links. Retrieval controllers read that derived state without rerunning analysis or calling GitHub.
+
+`PipelineTriageApplicationService` loads persisted failures, diagnoses, test correlations, stability snapshots, rerun transitions, bounded fingerprint history, and change relevance. Optional evidence remains optional. The existing `PipelineTriageService` ranks signals and derives rerun guidance; `DeveloperActionService` maps supported evidence to at most three ordered actions. V11 stores the complete derived triage state idempotently. Triage never calls GitHub, ingests changes, publishes results, or executes reruns.

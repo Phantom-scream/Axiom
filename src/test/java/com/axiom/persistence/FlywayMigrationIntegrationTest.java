@@ -13,7 +13,7 @@ class FlywayMigrationIntegrationTest extends IntegrationTestSupport {
             var result = statement.executeQuery(); result.next(); assertThat(result.getInt(1)).isEqualTo(1);
         }
     }
-    @Test void migrationsReachV10WithCorrelationComparisonAndRelevanceEvidence() throws Exception {
+    @Test void migrationsReachV11WithRelevanceAndTriageDerivedState() throws Exception {
         try (var connection = dataSource.getConnection();
                 var versionStatement = connection.prepareStatement(
                         "select max(version::integer) from flyway_schema_history where success");
@@ -25,7 +25,7 @@ class FlywayMigrationIntegrationTest extends IntegrationTestSupport {
                         """)) {
             var version = versionStatement.executeQuery();
             version.next();
-            assertThat(version.getInt(1)).isEqualTo(10);
+            assertThat(version.getInt(1)).isEqualTo(11);
             var columns = columnStatement.executeQuery();
             columns.next();
             assertThat(columns.getInt(1)).isEqualTo(2);
@@ -47,6 +47,15 @@ class FlywayMigrationIntegrationTest extends IntegrationTestSupport {
                 var relevanceTables = relevanceStatement.executeQuery();
                 relevanceTables.next();
                 assertThat(relevanceTables.getInt(1)).isEqualTo(2);
+            }
+            try (var triageStatement = connection.prepareStatement(
+                    """
+                    select count(*) from information_schema.tables
+                    where table_name in ('triage_evidence','triage_actions')
+                    """)) {
+                var triageTables = triageStatement.executeQuery();
+                triageTables.next();
+                assertThat(triageTables.getInt(1)).isEqualTo(2);
             }
         }
     }
