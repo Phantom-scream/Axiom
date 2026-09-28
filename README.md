@@ -8,7 +8,7 @@ CI failures are expensive to triage because their evidence is fragmented and pro
 
 ## Current scope
 
-Axiom ingests GitHub Actions runs and logs, extracts deterministic failure events, classifies them with explainable rules, and ingests framework-neutral JUnit XML. Structured failed tests are correlated to extracted failure events using conservative EXACT or STRONG evidence. Explicit workflow-attempt transitions support stability-v1 without treating unrelated runs or changed commits as unchanged reruns. GitHub Compare ingestion persists provider-neutral, categorized changed files without storing patches. The analysis remains deterministic and does not use AI.
+Axiom ingests GitHub Actions runs and logs, extracts deterministic failure events, classifies them with explainable rules, and ingests framework-neutral JUnit XML. Structured failed tests are correlated to extracted failure events using conservative EXACT or STRONG evidence. Explicit workflow-attempt transitions support stability-v1 without treating unrelated runs or changed commits as unchanged reruns. GitHub Compare ingestion persists provider-neutral, categorized changed files without storing patches. Change-relevance-v1 combines those stored signals into an explainable, persisted relevance result for each failure. The analysis remains deterministic and does not use AI.
 
 ## Architecture and stack
 
@@ -86,7 +86,15 @@ curl http://localhost:8080/api/v1/pipeline-runs/<id>/changes
 
 The POST explicitly calls GitHub; GET reads only PostgreSQL. Pull-request workflow metadata supplies base/head SHAs for future ingestions. Runs without a reliable base SHA return a controlled validation error rather than assuming a branch or parent commit. See [Git change ingestion](docs/git-change-ingestion.md).
 
-Change relevance is deterministic evidence rather than proof of causation. Changed-file categories support future pipeline relevance analysis and distinguish source, tests, dependencies, CI, infrastructure, and documentation.
+After change ingestion, analyze and retrieve relevance without another GitHub call:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/pipeline-runs/<id>/changes/analyze
+curl http://localhost:8080/api/v1/pipeline-runs/<id>/relevance
+curl http://localhost:8080/api/v1/pipeline-runs/<id>/relevance/<failure-fingerprint>
+```
+
+Change relevance is deterministic evidence rather than proof of causation. Results and their evidence are persisted idempotently under `change-relevance-v1`. Confidence expresses heuristic evidence strength, not a probability. Analysis requires an already-ingested change set; optional diagnosis, structured-test, test-history, and rerun evidence improve the result but are not prerequisites. See [change relevance](docs/change-relevance.md).
 
 ## Project structure
 

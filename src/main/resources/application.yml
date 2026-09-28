@@ -27,6 +27,8 @@ info:
     name: Axiom
     version: ${AXIOM_VERSION:0.1.0-SNAPSHOT}
 axiom:
+  change-analysis:
+    history-lookback: 50
   github:
     token: ${AXIOM_GITHUB_TOKEN:}
     base-url: ${AXIOM_GITHUB_BASE_URL:https://api.github.com}

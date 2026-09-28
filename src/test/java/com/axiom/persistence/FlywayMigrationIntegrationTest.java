@@ -13,7 +13,7 @@ class FlywayMigrationIntegrationTest extends IntegrationTestSupport {
             var result = statement.executeQuery(); result.next(); assertThat(result.getInt(1)).isEqualTo(1);
         }
     }
-    @Test void migrationsReachV9WithCorrelationAndComparisonMetadata() throws Exception {
+    @Test void migrationsReachV10WithCorrelationComparisonAndRelevanceEvidence() throws Exception {
         try (var connection = dataSource.getConnection();
                 var versionStatement = connection.prepareStatement(
                         "select max(version::integer) from flyway_schema_history where success");
@@ -25,7 +25,7 @@ class FlywayMigrationIntegrationTest extends IntegrationTestSupport {
                         """)) {
             var version = versionStatement.executeQuery();
             version.next();
-            assertThat(version.getInt(1)).isEqualTo(9);
+            assertThat(version.getInt(1)).isEqualTo(10);
             var columns = columnStatement.executeQuery();
             columns.next();
             assertThat(columns.getInt(1)).isEqualTo(2);
@@ -38,6 +38,15 @@ class FlywayMigrationIntegrationTest extends IntegrationTestSupport {
                 var metadataColumns = metadataStatement.executeQuery();
                 metadataColumns.next();
                 assertThat(metadataColumns.getInt(1)).isEqualTo(2);
+            }
+            try (var relevanceStatement = connection.prepareStatement(
+                    """
+                    select count(*) from information_schema.tables
+                    where table_name in ('change_relevance_evidence','relevance_related_files')
+                    """)) {
+                var relevanceTables = relevanceStatement.executeQuery();
+                relevanceTables.next();
+                assertThat(relevanceTables.getInt(1)).isEqualTo(2);
             }
         }
     }

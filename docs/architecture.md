@@ -27,8 +27,18 @@ flowchart LR
   GP --> GC[GitHub Compare API]
   GI --> CF[ChangedFileClassifier]
   GI --> GDB[(git_change_sets / changed_files)]
+  GDB --> FCC[FailureChangeContextService]
+  FE --> FCC
+  D --> FCC
+  TC --> FCC
+  RA --> FCC
+  FCC --> CR[ChangeRelevanceService v1]
+  CR --> RDB[(relevance results / evidence / related files)]
+  RDB --> API
 ```
 
 `CiProvider` is the seam for CI run integrations; `GitChangeProvider` is the separate provider-neutral seam for source changes. GitHub DTOs remain at the integration edge. `GitChangeIngestionService` resolves persisted base/head metadata, invokes the matching provider, classifies normalized files, and idempotently replaces V7 changed-file rows. Retrieval never calls GitHub implicitly.
 
 Test correlation and rerun analysis operate only on provider-neutral persisted pipeline, failure, and test data. Correlation is durable derived state on each test execution; rerun transitions remain derived from raw executions and pipeline attempt metadata.
+
+`FailureChangeContextService` assembles bounded, persisted evidence for one failure: its optional diagnosis, correlated test and test history, explicit rerun transitions, prior same-fingerprint occurrences, and the current normalized change set. `PipelineChangeAnalysisService` invokes the existing deterministic v1 scorer for every failure and idempotently persists the result, evidence, and related-file links. Retrieval controllers read that derived state without rerunning analysis or calling GitHub.

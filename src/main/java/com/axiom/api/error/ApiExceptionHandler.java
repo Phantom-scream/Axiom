@@ -28,6 +28,8 @@ public class ApiExceptionHandler {
     ResponseEntity<ApiError> notFound(PipelineRunNotFoundException e,HttpServletRequest r){return response(HttpStatus.NOT_FOUND,e.getMessage(),r,"PIPELINE_RUN_NOT_FOUND");}
     @ExceptionHandler(ResourceNotFoundException.class)
     ResponseEntity<ApiError> resourceNotFound(ResourceNotFoundException e,HttpServletRequest r){return response(HttpStatus.NOT_FOUND,e.getMessage(),r,"RESOURCE_NOT_FOUND");}
+    @ExceptionHandler(AnalysisPrerequisiteException.class)
+    ResponseEntity<ApiError> analysisPrerequisite(AnalysisPrerequisiteException e,HttpServletRequest r){return response(HttpStatus.CONFLICT,e.getMessage(),r,"ANALYSIS_PREREQUISITE_MISSING");}
     @ExceptionHandler(GitComparisonUnavailableException.class)
     ResponseEntity<ApiError> comparisonUnavailable(GitComparisonUnavailableException e,HttpServletRequest r){return response(HttpStatus.UNPROCESSABLE_CONTENT,e.getMessage(),r,"GIT_COMPARISON_UNAVAILABLE");}
     @ExceptionHandler(GitHubComparisonNotFoundException.class)
