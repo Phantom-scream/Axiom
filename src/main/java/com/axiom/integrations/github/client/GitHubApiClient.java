@@ -6,6 +6,8 @@ import com.axiom.integrations.github.dto.GitHubCheckRunResponseDto;
 import com.axiom.integrations.github.dto.GitHubCreateCheckRunRequestDto;
 import com.axiom.integrations.github.dto.GitHubJobDto;
 import com.axiom.integrations.github.dto.GitHubJobsResponseDto;
+import com.axiom.integrations.github.dto.GitHubIssueCommentRequestDto;
+import com.axiom.integrations.github.dto.GitHubIssueCommentResponseDto;
 import com.axiom.integrations.github.dto.GitHubWorkflowRunDto;
 import com.axiom.integrations.github.dto.GitHubUpdateCheckRunRequestDto;
 import com.axiom.integrations.github.exception.ExternalProviderUnavailableException;
@@ -14,9 +16,11 @@ import com.axiom.integrations.github.exception.GitHubCheckTargetNotFoundExceptio
 import com.axiom.integrations.github.exception.GitHubComparisonNotFoundException;
 import com.axiom.integrations.github.exception.GitHubIntegrationException;
 import com.axiom.integrations.github.exception.GitHubPermissionException;
+import com.axiom.integrations.github.exception.GitHubPullRequestNotFoundException;
 import com.axiom.integrations.github.exception.GitHubRateLimitException;
 import com.axiom.integrations.github.exception.InvalidGitHubComparisonException;
 import com.axiom.integrations.github.exception.InvalidGitHubCheckException;
+import com.axiom.integrations.github.exception.InvalidGitHubCommentException;
 import com.axiom.integrations.github.exception.PipelineRunNotFoundException;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -98,6 +102,7 @@ public class GitHubApiClient {
                 "/repos/{owner}/{repo}/check-runs",
                 request,
                 GitHubCheckRunResponseDto.class,
+                NotFoundKind.CHECK,
                 owner,
                 repo);
     }
@@ -109,9 +114,36 @@ public class GitHubApiClient {
                 "/repos/{owner}/{repo}/check-runs/{checkRunId}",
                 request,
                 GitHubCheckRunResponseDto.class,
+                NotFoundKind.CHECK,
                 owner,
                 repo,
                 checkRunId);
+    }
+
+    public GitHubIssueCommentResponseDto createIssueComment(
+            String owner, String repo, long pullRequestNumber, GitHubIssueCommentRequestDto request) {
+        return write(
+                HttpMethod.POST,
+                "/repos/{owner}/{repo}/issues/{pullRequestNumber}/comments",
+                request,
+                GitHubIssueCommentResponseDto.class,
+                NotFoundKind.COMMENT,
+                owner,
+                repo,
+                pullRequestNumber);
+    }
+
+    public GitHubIssueCommentResponseDto updateIssueComment(
+            String owner, String repo, long commentId, GitHubIssueCommentRequestDto request) {
+        return write(
+                HttpMethod.PATCH,
+                "/repos/{owner}/{repo}/issues/comments/{commentId}",
+                request,
+                GitHubIssueCommentResponseDto.class,
+                NotFoundKind.COMMENT,
+                owner,
+                repo,
+                commentId);
     }
 
     private <T> T get(
@@ -147,7 +179,12 @@ public class GitHubApiClient {
     }
 
     private <T> T write(
-            HttpMethod method, String path, Object body, Class<T> type, Object... variables) {
+            HttpMethod method,
+            String path,
+            Object body,
+            Class<T> type,
+            NotFoundKind notFoundKind,
+            Object... variables) {
         if (properties.token() == null || properties.token().isBlank()) {
             throw new GitHubAuthenticationException();
         }
@@ -162,7 +199,7 @@ public class GitHubApiClient {
                             response -> response.createException().map(error -> translate(
                                             error.getStatusCode(),
                                             response.headers().asHttpHeaders(),
-                                            NotFoundKind.CHECK,
+                                            notFoundKind,
                                             variables)))
                     .bodyToMono(type)
                     .block(REQUEST_TIMEOUT);
@@ -196,9 +233,15 @@ public class GitHubApiClient {
         if (code == 404 && notFoundKind == NotFoundKind.CHECK) {
             return new GitHubCheckTargetNotFoundException();
         }
+        if (code == 404 && notFoundKind == NotFoundKind.COMMENT) {
+            return new GitHubPullRequestNotFoundException();
+        }
         if (code == 404) return new GitHubComparisonNotFoundException();
         if (code == 422 && notFoundKind == NotFoundKind.CHECK) {
             return new InvalidGitHubCheckException();
+        }
+        if (code == 422 && notFoundKind == NotFoundKind.COMMENT) {
+            return new InvalidGitHubCommentException();
         }
         if (code == 422) return new InvalidGitHubComparisonException();
         if (code >= 500) return new ExternalProviderUnavailableException();
@@ -208,6 +251,7 @@ public class GitHubApiClient {
     private enum NotFoundKind {
         PIPELINE_RUN,
         COMPARISON,
-        CHECK
+        CHECK,
+        COMMENT
     }
 }

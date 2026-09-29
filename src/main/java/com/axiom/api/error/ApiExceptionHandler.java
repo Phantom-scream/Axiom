@@ -36,10 +36,14 @@ public class ApiExceptionHandler {
     ResponseEntity<ApiError> comparisonNotFound(GitHubComparisonNotFoundException e,HttpServletRequest r){return response(HttpStatus.NOT_FOUND,e.getMessage(),r,"GITHUB_COMPARISON_NOT_FOUND");}
     @ExceptionHandler(GitHubCheckTargetNotFoundException.class)
     ResponseEntity<ApiError> checkTargetNotFound(GitHubCheckTargetNotFoundException e,HttpServletRequest r){return response(HttpStatus.NOT_FOUND,e.getMessage(),r,"GITHUB_CHECK_TARGET_NOT_FOUND");}
+    @ExceptionHandler(GitHubPullRequestNotFoundException.class)
+    ResponseEntity<ApiError> pullRequestNotFound(GitHubPullRequestNotFoundException e,HttpServletRequest r){return response(HttpStatus.NOT_FOUND,e.getMessage(),r,"GITHUB_PULL_REQUEST_NOT_FOUND");}
     @ExceptionHandler(InvalidGitHubComparisonException.class)
     ResponseEntity<ApiError> invalidComparison(InvalidGitHubComparisonException e,HttpServletRequest r){return response(HttpStatus.UNPROCESSABLE_CONTENT,e.getMessage(),r,"GITHUB_COMPARISON_INVALID");}
     @ExceptionHandler(InvalidGitHubCheckException.class)
     ResponseEntity<ApiError> invalidCheck(InvalidGitHubCheckException e,HttpServletRequest r){return response(HttpStatus.UNPROCESSABLE_CONTENT,e.getMessage(),r,"GITHUB_CHECK_INVALID");}
+    @ExceptionHandler(InvalidGitHubCommentException.class)
+    ResponseEntity<ApiError> invalidComment(InvalidGitHubCommentException e,HttpServletRequest r){return response(HttpStatus.UNPROCESSABLE_CONTENT,e.getMessage(),r,"GITHUB_COMMENT_INVALID");}
     @ExceptionHandler(GitHubAuthenticationException.class)
     ResponseEntity<ApiError> authentication(GitHubAuthenticationException e,HttpServletRequest r){return response(HttpStatus.UNAUTHORIZED,e.getMessage(),r,"GITHUB_AUTHENTICATION_FAILED");}
     @ExceptionHandler({GitHubPermissionException.class,GitHubRateLimitException.class})

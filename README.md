@@ -35,7 +35,7 @@ Run the application with local defaults:
 
 The local defaults are `jdbc:postgresql://localhost:5432/axiom`, username `axiom`, and password `axiom`. Override them with `AXIOM_DB_URL`, `AXIOM_DB_USERNAME`, and `AXIOM_DB_PASSWORD`.
 
-Set `AXIOM_GITHUB_TOKEN` before requesting GitHub ingestion. Use a fine-grained token with read access to Actions and repository metadata; private repositories require access to that repository. Explicit GitHub Check publishing additionally requires Checks write permission. Read-only analysis remains available without write permission, and tokens are never logged.
+Set `AXIOM_GITHUB_TOKEN` before requesting GitHub ingestion. Use a fine-grained token with read access to Actions and repository metadata; private repositories require access to that repository. Explicit GitHub Check publishing additionally requires Checks write permission, while PR reporting requires pull-request Issues write permission. Read-only analysis remains available without write permission, and tokens are never logged.
 
 ## Tests
 
@@ -123,6 +123,22 @@ curl -X POST http://localhost:8080/api/v1/pipeline-runs/<id>/publish/github-chec
 ```
 
 The check is named `Axiom CI Intelligence`, targets the run's persisted head SHA, and contains bounded deterministic triage rather than raw logs or stack traces. Repeated publishing updates the tracked Check Run instead of creating unbounded duplicates. Normal analysis never publishes. See [GitHub Checks](docs/github-checks.md).
+
+For a pipeline run associated with a pull request, publish or update one marked Axiom report explicitly:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/pipeline-runs/<id>/publish/pr-comment
+```
+
+The comment starts with `<!-- axiom-ci-intelligence -->`. Axiom reuses the tracked comment for repeated publication and for later runs of the same repository pull request, preventing comment spam. It reads persisted triage only and never invokes analysis implicitly. See [GitHub reporting](docs/github-reporting.md).
+
+Retrieve bounded descriptive repository health from persisted history:
+
+```bash
+curl 'http://localhost:8080/api/v1/repositories/<repository-id>/health?days=30&maxRuns=200'
+```
+
+The response includes run outcomes, failure classifications, top fingerprints, rerun guidance, change relevance, and separate suspected-flaky, flaky, and consistently-failing test counts. Health requests never call GitHub or recompute analysis. See [pipeline health](docs/pipeline-health.md).
 
 ## Project structure
 

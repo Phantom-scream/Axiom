@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class GitHubPublicationPersistenceService {
     public static final String GITHUB_CHECK = "GITHUB_CHECK";
+    public static final String PR_COMMENT = "PR_COMMENT";
 
     private final JdbcTemplate jdbc;
     private final Clock clock;
@@ -22,6 +23,33 @@ public class GitHubPublicationPersistenceService {
     }
 
     public Optional<GitHubPublication> findCheck(UUID pipelineRunId) {
+        return find(pipelineRunId, GITHUB_CHECK);
+    }
+
+    public Optional<GitHubPublication> findPrComment(UUID pipelineRunId) {
+        return find(pipelineRunId, PR_COMMENT);
+    }
+
+    public Optional<GitHubPublication> findPrCommentForPullRequest(
+            UUID repositoryId, long pullRequestNumber) {
+        return jdbc.query(
+                """
+                select p.id,p.pipeline_run_id,p.publication_type,p.external_id,p.external_url,
+                       p.triage_version,p.published_at,p.updated_at
+                from github_publications p
+                join pipeline_runs pr on pr.id=p.pipeline_run_id
+                where pr.repository_id=? and pr.pull_request_number=?
+                  and p.publication_type=?
+                order by coalesce(p.updated_at,p.published_at) desc,p.id
+                limit 1
+                """,
+                rs -> rs.next() ? Optional.of(map(rs)) : Optional.empty(),
+                repositoryId,
+                pullRequestNumber,
+                PR_COMMENT);
+    }
+
+    private Optional<GitHubPublication> find(UUID pipelineRunId, String publicationType) {
         return jdbc.query(
                 """
                 select id,pipeline_run_id,publication_type,external_id,external_url,
@@ -33,12 +61,27 @@ public class GitHubPublicationPersistenceService {
                         ? Optional.of(map(rs))
                         : Optional.empty(),
                 pipelineRunId,
-                GITHUB_CHECK);
+                publicationType);
     }
 
     @Transactional
     public GitHubPublication saveCheck(
             UUID pipelineRunId, String externalId, String externalUrl, String triageVersion) {
+        return save(pipelineRunId, GITHUB_CHECK, externalId, externalUrl, triageVersion);
+    }
+
+    @Transactional
+    public GitHubPublication savePrComment(
+            UUID pipelineRunId, String externalId, String externalUrl, String triageVersion) {
+        return save(pipelineRunId, PR_COMMENT, externalId, externalUrl, triageVersion);
+    }
+
+    private GitHubPublication save(
+            UUID pipelineRunId,
+            String publicationType,
+            String externalId,
+            String externalUrl,
+            String triageVersion) {
         var now = Timestamp.from(clock.instant());
         jdbc.update(
                 """
@@ -54,13 +97,13 @@ public class GitHubPublicationPersistenceService {
                 """,
                 UUID.randomUUID(),
                 pipelineRunId,
-                GITHUB_CHECK,
+                publicationType,
                 externalId,
                 externalUrl,
                 triageVersion,
                 now,
                 now);
-        return findCheck(pipelineRunId).orElseThrow();
+        return find(pipelineRunId, publicationType).orElseThrow();
     }
 
     private GitHubPublication map(java.sql.ResultSet rs) throws java.sql.SQLException {

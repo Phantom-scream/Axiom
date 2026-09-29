@@ -56,6 +56,15 @@ flowchart LR
   GCP --> GCR[GitHubChecksClient]
   GCR --> GCHK[GitHub Checks API]
   GCP --> PUB[(github_publications)]
+  TDB --> PRP[GitHubPrTriagePublisher]
+  PRP --> PRC[GitHubPullRequestClient]
+  PRC --> GPR[GitHub Issue Comments API]
+  PRP --> PUB
+  DB --> RHS[RepositoryHealthService]
+  RDB --> RHS
+  TDB --> RHS
+  TS --> RHS
+  RHS --> API
 ```
 
 `CiProvider` is the seam for CI run integrations; `GitChangeProvider` is the separate provider-neutral seam for source changes. GitHub DTOs remain at the integration edge. `GitChangeIngestionService` resolves persisted base/head metadata, invokes the matching provider, classifies normalized files, and idempotently replaces V7 changed-file rows. Retrieval never calls GitHub implicitly.
@@ -69,3 +78,7 @@ Test correlation and rerun analysis operate only on provider-neutral persisted p
 `PipelineAnalysisOrchestrator` is coordination only. It invokes those same independently callable services in dependency order, reuses current persisted state by default, reports every stage outcome, and continues to triage with partial evidence. It never embeds extraction, classification, relevance, or triage rules and never publishes externally.
 
 GitHub delivery is a separate explicit edge. `GitHubTriageCheckPublisher` reads persisted triage, renders bounded and escaped output, and asks `GitHubChecksClient` to create or update a neutral `Axiom CI Intelligence` Check on the persisted head SHA. V12 tracks the external Check identifier so repeat publication updates one report. The analysis pipeline remains usable without Checks write permission.
+
+`GitHubPrTriagePublisher` uses the same persisted triage and safe renderer to create or update one marker-bearing issue comment. Publication lookup first uses the pipeline run and then the repository/PR identity, so later attempts update the tracked discussion entry rather than adding comment spam. PR publishing remains explicit and never invokes analysis.
+
+`RepositoryHealthService` performs a fixed number of grouped PostgreSQL queries over a run-ID window limited by both age and count. It reads stored diagnoses, fingerprints, triage, relevance, and stability snapshots without calling providers or recomputing derived analysis.

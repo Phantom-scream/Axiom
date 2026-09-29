@@ -19,7 +19,9 @@ import com.axiom.domain.pipeline.GitChangeSet;
 import com.axiom.domain.pipeline.GitProvider;
 import com.axiom.integrations.github.GitHubChangeProvider;
 import com.axiom.integrations.github.client.GitHubChecksClient;
+import com.axiom.integrations.github.client.GitHubPullRequestClient;
 import com.axiom.integrations.github.dto.GitHubCheckRunResponseDto;
+import com.axiom.integrations.github.dto.GitHubIssueCommentResponseDto;
 import com.axiom.integrations.github.exception.GitHubPermissionException;
 import com.axiom.logstorage.LogStorage;
 import java.nio.charset.StandardCharsets;
@@ -41,6 +43,7 @@ class PipelineAnalysisAndGitHubCheckControllerTest extends IntegrationTestSuppor
     @Autowired private LogStorage logs;
     @MockitoBean private GitHubChangeProvider changeProvider;
     @MockitoBean private GitHubChecksClient checksClient;
+    @MockitoBean private GitHubPullRequestClient pullRequestClient;
 
     @Test
     void analyzesAllAvailableEvidenceAndReusesItWithoutPublishing() throws Exception {
@@ -199,9 +202,123 @@ class PipelineAnalysisAndGitHubCheckControllerTest extends IntegrationTestSuppor
                 .andExpect(jsonPath("$.error").value("GITHUB_PERMISSION_DENIED"));
     }
 
+    @Test
+    void explicitlyCreatesThenUpdatesOneMarkedPullRequestComment() throws Exception {
+        UUID runId = run(false, 42L);
+        mockMvc.perform(post("/api/v1/pipeline-runs/{id}/triage", runId))
+                .andExpect(status().isOk());
+        when(pullRequestClient.createComment(anyString(), anyString(), org.mockito.ArgumentMatchers.eq(42L), anyString()))
+                .thenReturn(new GitHubIssueCommentResponseDto(
+                        456, "https://github.test/comments/456"));
+        when(pullRequestClient.updateComment(anyString(), anyString(), org.mockito.ArgumentMatchers.eq(456L), anyString()))
+                .thenReturn(new GitHubIssueCommentResponseDto(
+                        456, "https://github.test/comments/456"));
+
+        mockMvc.perform(post("/api/v1/pipeline-runs/{id}/publish/pr-comment", runId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pullRequestNumber").value(42))
+                .andExpect(jsonPath("$.externalCommentId").value("456"))
+                .andExpect(jsonPath("$.operation").value("CREATED"));
+        mockMvc.perform(post("/api/v1/pipeline-runs/{id}/publish/pr-comment", runId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.operation").value("UPDATED"));
+
+        var body = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(pullRequestClient).createComment(
+                org.mockito.ArgumentMatchers.eq("analysis-owner"),
+                anyString(),
+                org.mockito.ArgumentMatchers.eq(42L),
+                body.capture());
+        org.assertj.core.api.Assertions.assertThat(body.getValue())
+                .startsWith("<!-- axiom-ci-intelligence -->");
+        verify(pullRequestClient)
+                .updateComment(
+                        anyString(),
+                        anyString(),
+                        org.mockito.ArgumentMatchers.eq(456L),
+                        anyString());
+        org.assertj.core.api.Assertions.assertThat(count("github_publications", runId)).isEqualTo(1);
+    }
+
+    @Test
+    void pullRequestPublishingRequiresTriageAndAssociatedPullRequest() throws Exception {
+        UUID missingTriage = run(false, 42L);
+        mockMvc.perform(post("/api/v1/pipeline-runs/{id}/publish/pr-comment", missingTriage))
+                .andExpect(status().isNotFound());
+
+        UUID noPullRequest = run(false);
+        mockMvc.perform(post("/api/v1/pipeline-runs/{id}/triage", noPullRequest))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/pipeline-runs/{id}/publish/pr-comment", noPullRequest))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("ANALYSIS_PREREQUISITE_MISSING"));
+        verify(pullRequestClient, never())
+                .createComment(anyString(), anyString(), org.mockito.ArgumentMatchers.anyLong(), anyString());
+    }
+
+    @Test
+    void pullRequestProviderErrorsUseExistingTranslation() throws Exception {
+        UUID runId = run(false, 42L);
+        mockMvc.perform(post("/api/v1/pipeline-runs/{id}/triage", runId))
+                .andExpect(status().isOk());
+        when(pullRequestClient.createComment(anyString(), anyString(), org.mockito.ArgumentMatchers.eq(42L), anyString()))
+                .thenThrow(new GitHubPermissionException());
+
+        mockMvc.perform(post("/api/v1/pipeline-runs/{id}/publish/pr-comment", runId))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("GITHUB_PERMISSION_DENIED"));
+    }
+
+    @Test
+    void laterRunOfSamePullRequestUpdatesTheTrackedComment() throws Exception {
+        UUID repositoryId = repository();
+        UUID firstRun = run(repositoryId, false, 77L);
+        UUID laterRun = run(repositoryId, false, 77L);
+        mockMvc.perform(post("/api/v1/pipeline-runs/{id}/triage", firstRun))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/pipeline-runs/{id}/triage", laterRun))
+                .andExpect(status().isOk());
+        when(pullRequestClient.createComment(anyString(), anyString(), org.mockito.ArgumentMatchers.eq(77L), anyString()))
+                .thenReturn(new GitHubIssueCommentResponseDto(
+                        789, "https://github.test/comments/789"));
+        when(pullRequestClient.updateComment(anyString(), anyString(), org.mockito.ArgumentMatchers.eq(789L), anyString()))
+                .thenReturn(new GitHubIssueCommentResponseDto(
+                        789, "https://github.test/comments/789"));
+
+        mockMvc.perform(post("/api/v1/pipeline-runs/{id}/publish/pr-comment", firstRun))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.operation").value("CREATED"));
+        mockMvc.perform(post("/api/v1/pipeline-runs/{id}/publish/pr-comment", laterRun))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.operation").value("UPDATED"));
+
+        verify(pullRequestClient, times(1))
+                .createComment(anyString(), anyString(), org.mockito.ArgumentMatchers.eq(77L), anyString());
+        verify(pullRequestClient, times(1))
+                .updateComment(anyString(), anyString(), org.mockito.ArgumentMatchers.eq(789L), anyString());
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject(
+                        """
+                        select count(distinct p.external_id)
+                        from github_publications p
+                        join pipeline_runs pr on pr.id=p.pipeline_run_id
+                        where pr.repository_id=? and pr.pull_request_number=77
+                          and p.publication_type='PR_COMMENT'
+                        """,
+                        Integer.class,
+                        repositoryId))
+                .isEqualTo(1);
+    }
+
     private UUID run(boolean comparisonMetadata) {
+        return run(comparisonMetadata, null);
+    }
+
+    private UUID run(boolean comparisonMetadata, Long pullRequestNumber) {
+        return run(repository(), comparisonMetadata, pullRequestNumber);
+    }
+
+    private UUID repository() {
         UUID repositoryId = UUID.randomUUID();
-        UUID runId = UUID.randomUUID();
         Timestamp now = Timestamp.from(Instant.now());
         jdbc.update(
                 "insert into repositories(id,provider,owner,name,created_at,updated_at) values(?,?,?,?,?,?)",
@@ -211,12 +328,18 @@ class PipelineAnalysisAndGitHubCheckControllerTest extends IntegrationTestSuppor
                 "repo-" + repositoryId,
                 now,
                 now);
+        return repositoryId;
+    }
+
+    private UUID run(UUID repositoryId, boolean comparisonMetadata, Long pullRequestNumber) {
+        UUID runId = UUID.randomUUID();
+        Timestamp now = Timestamp.from(Instant.now());
         jdbc.update(
                 """
                 insert into pipeline_runs(
                     id,repository_id,external_run_id,commit_sha,base_sha,event_name,status,
-                    conclusion,attempt,ingested_at)
-                values(?,?,?,?,?,?,?,?,?,?)
+                    conclusion,attempt,pull_request_number,ingested_at)
+                values(?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 runId,
                 repositoryId,
@@ -227,6 +350,7 @@ class PipelineAnalysisAndGitHubCheckControllerTest extends IntegrationTestSuppor
                 "COMPLETED",
                 "FAILURE",
                 1,
+                pullRequestNumber,
                 now);
         return runId;
     }
