@@ -17,6 +17,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -142,6 +143,65 @@ class RepositoryHealthControllerTest extends IntegrationTestSupport {
                 .andExpect(status().isBadRequest());
         mockMvc.perform(get("/api/v1/repositories/{id}/health", UUID.randomUUID()))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void remainsBoundedWithHundredsOfRunsAndManyFailureEvents() {
+        UUID repositoryId = repository();
+        Instant now = Instant.now();
+        var runRows = IntStream.range(0, 250)
+                .mapToObj(index -> {
+                    UUID id = UUID.randomUUID();
+                    Instant occurred = now.minus(index, ChronoUnit.MINUTES);
+                    return new Object[] {
+                        id,
+                        repositoryId,
+                        1_000_000L + index,
+                        id.toString(),
+                        "COMPLETED",
+                        index % 2 == 0 ? "SUCCESS" : "FAILURE",
+                        1,
+                        Timestamp.from(occurred),
+                        Timestamp.from(occurred),
+                        Timestamp.from(occurred)
+                    };
+                })
+                .toList();
+        jdbc.batchUpdate(
+                """
+                insert into pipeline_runs(
+                    id,repository_id,external_run_id,commit_sha,status,conclusion,attempt,
+                    started_at,finished_at,ingested_at)
+                values(?,?,?,?,?,?,?,?,?,?)
+                """,
+                runRows);
+        UUID failedRun = (UUID) runRows.get(1)[0];
+        var failures = IntStream.range(0, 100)
+                .mapToObj(index -> new Object[] {
+                    UUID.randomUUID(),
+                    failedRun,
+                    "EXCEPTION",
+                    "bounded fixture " + index,
+                    "%064x".formatted(index),
+                    "v1",
+                    1,
+                    index + 1,
+                    index + 1
+                })
+                .toList();
+        jdbc.batchUpdate(
+                """
+                insert into failure_events(
+                    id,pipeline_run_id,event_type,normalized_message,fingerprint,
+                    fingerprint_algorithm,occurrence_count,first_line,last_line)
+                values(?,?,?,?,?,?,?,?,?)
+                """,
+                failures);
+
+        var result = health.get(repositoryId, 30, 200);
+
+        assertThat(result.runs().total()).isEqualTo(200);
+        assertThat(result.topFailureFingerprints()).hasSize(10);
     }
 
     private UUID repository() {

@@ -1,13 +1,24 @@
 package com.axiom.application.publication;
 
 import com.axiom.domain.triage.PipelineTriageResult;
+import com.axiom.config.OperationalLimitsProperties;
 import com.axiom.integrations.github.client.GitHubChecksClient;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
 public class GitHubCheckRenderer {
     private static final int SUMMARY_LIMIT = 8_000;
-    private static final int TEXT_LIMIT = 60_000;
+    private final int textLimit;
+
+    public GitHubCheckRenderer() {
+        this.textLimit = 60_000;
+    }
+
+    @Autowired
+    public GitHubCheckRenderer(OperationalLimitsProperties limits) {
+        this.textLimit = limits.effectivePublishedMarkdownCharacters();
+    }
 
     public GitHubChecksClient.CheckOutput render(PipelineTriageResult triage) {
         String title = title(triage);
@@ -69,7 +80,7 @@ public class GitHubCheckRenderer {
         }
         text.append("\nAxiom reports deterministic evidence and investigation priority; it does not prove causation or alter the source CI result.");
         return new GitHubChecksClient.CheckOutput(
-                bounded(title, 255), bounded(summary.toString(), SUMMARY_LIMIT), bounded(text.toString(), TEXT_LIMIT));
+                bounded(title, 255), bounded(summary.toString(), SUMMARY_LIMIT), bounded(text.toString(), textLimit));
     }
 
     private String title(PipelineTriageResult triage) {

@@ -1,0 +1,13 @@
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: ${AXIOM_DB_URL}
+    username: ${AXIOM_DB_USERNAME}
+    password: ${AXIOM_DB_PASSWORD}
+
+management:
+  endpoint:
+    health:
+      show-details: never

@@ -17,18 +17,24 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
+      show-details: never
       probes:
         enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
 info:
   app:
     name: Axiom
     version: ${AXIOM_VERSION:0.1.0-SNAPSHOT}
 axiom:
+  rerun-history:
+    max-executions: ${AXIOM_RERUN_HISTORY_MAX_EXECUTIONS:1000}
   change-analysis:
-    history-lookback: 50
+    history-lookback: ${AXIOM_CHANGE_HISTORY_LOOKBACK:50}
   triage:
     version: triage-v1
     max-actions: 3
@@ -37,6 +43,25 @@ axiom:
   github:
     token: ${AXIOM_GITHUB_TOKEN:}
     base-url: ${AXIOM_GITHUB_BASE_URL:https://api.github.com}
+    webhook-secret: ${AXIOM_GITHUB_WEBHOOK_SECRET:}
+    auto-publish-check: ${AXIOM_GITHUB_AUTO_PUBLISH_CHECK:false}
+    auto-publish-pr-comment: ${AXIOM_GITHUB_AUTO_PUBLISH_PR_COMMENT:false}
+    connect-timeout: ${AXIOM_GITHUB_CONNECT_TIMEOUT:5s}
+    read-timeout: ${AXIOM_GITHUB_READ_TIMEOUT:30s}
+    request-timeout: ${AXIOM_GITHUB_REQUEST_TIMEOUT:35s}
+    retry-max-attempts: ${AXIOM_GITHUB_RETRY_MAX_ATTEMPTS:3}
+    retry-initial-backoff: ${AXIOM_GITHUB_RETRY_INITIAL_BACKOFF:200ms}
+    retry-max-backoff: ${AXIOM_GITHUB_RETRY_MAX_BACKOFF:2s}
+  webhook:
+    enabled: ${AXIOM_GITHUB_WEBHOOK_ENABLED:false}
+    max-payload-bytes: ${AXIOM_WEBHOOK_MAX_PAYLOAD_BYTES:1048576}
+    core-threads: ${AXIOM_WEBHOOK_CORE_THREADS:2}
+    max-threads: ${AXIOM_WEBHOOK_MAX_THREADS:4}
+    queue-capacity: ${AXIOM_WEBHOOK_QUEUE_CAPACITY:100}
+  limits:
+    github-response-bytes: ${AXIOM_GITHUB_RESPONSE_BYTES:25165824}
+    stored-log-bytes: ${AXIOM_STORED_LOG_BYTES:25165824}
+    published-markdown-characters: ${AXIOM_PUBLISHED_MARKDOWN_CHARACTERS:60000}
 logging:
   pattern:
-    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%X{correlationId:-}] %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [correlationId=%X{correlationId:-} webhookDeliveryId=%X{webhookDeliveryId:-} pipelineRunId=%X{pipelineRunId:-}] %logger{36} - %msg%n"

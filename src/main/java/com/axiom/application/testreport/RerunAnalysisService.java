@@ -15,21 +15,35 @@ import org.springframework.stereotype.Service;
 @Service
 public class RerunAnalysisService {
     private final JdbcTemplate jdbc;
+    private final com.axiom.config.RerunHistoryProperties properties;
 
     public RerunAnalysisService(JdbcTemplate jdbc) {
+        this(jdbc, new com.axiom.config.RerunHistoryProperties(null));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public RerunAnalysisService(JdbcTemplate jdbc, com.axiom.config.RerunHistoryProperties properties) {
         this.jdbc = jdbc;
+        this.properties = properties;
     }
 
     public List<RerunTransition> transitions(String stableTestId) {
         List<Execution> executions = jdbc.query(
                 """
-                select distinct on (pr.external_run_id, pr.attempt)
-                       t.pipeline_run_id, t.stable_test_id, pr.external_run_id, pr.attempt,
-                       pr.commit_sha, t.status, t.failure_fingerprint
-                from test_case_executions t
-                join pipeline_runs pr on pr.id = t.pipeline_run_id
-                where t.stable_test_id = ?
-                order by pr.external_run_id, pr.attempt, t.created_at desc, t.id
+                with recent as (
+                    select t.*, pr.external_run_id, pr.attempt, pr.commit_sha
+                    from test_case_executions t
+                    join pipeline_runs pr on pr.id = t.pipeline_run_id
+                    where t.stable_test_id = ?
+                    order by coalesce(pr.finished_at, pr.started_at, pr.created_at) desc,
+                             pr.external_run_id desc, pr.attempt desc, t.created_at desc, t.id
+                    limit ?
+                )
+                select distinct on (external_run_id, attempt)
+                       pipeline_run_id, stable_test_id, external_run_id, attempt,
+                       commit_sha, status, failure_fingerprint
+                from recent
+                order by external_run_id, attempt, created_at desc, id
                 """,
                 (rs, row) -> new Execution(
                         rs.getObject("pipeline_run_id", UUID.class),
@@ -39,7 +53,7 @@ public class RerunAnalysisService {
                         rs.getString("commit_sha"),
                         TestStatus.valueOf(rs.getString("status")),
                         rs.getString("failure_fingerprint")),
-                stableTestId);
+                stableTestId, properties.effectiveMaxExecutions());
         if (executions.isEmpty()) {
             throw new ResourceNotFoundException("Stable test " + stableTestId + " was not found.");
         }
@@ -60,7 +74,8 @@ public class RerunAnalysisService {
                     || from.runAttempt() == to.runAttempt()) {
                 continue;
             }
-            boolean sameCommit = Objects.equals(from.commitSha(), to.commitSha());
+            boolean sameCommit = from.commitSha() != null && !from.commitSha().isBlank()
+                    && Objects.equals(from.commitSha(), to.commitSha());
             transitions.add(new RerunTransition(
                     from.stableTestId(),
                     from.externalRunId(),

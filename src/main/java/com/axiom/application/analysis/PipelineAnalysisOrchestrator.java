@@ -8,11 +8,16 @@ import com.axiom.domain.analysis.AnalysisStageResult;
 import com.axiom.domain.analysis.AnalysisStageStatus;
 import com.axiom.domain.analysis.PipelineAnalysisResult;
 import com.axiom.integrations.github.exception.GitHubIntegrationException;
+import com.axiom.observability.AxiomMetrics;
+import io.micrometer.core.instrument.Timer;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -27,6 +32,29 @@ public class PipelineAnalysisOrchestrator {
     private final GitChangeIngestionService changes;
     private final PipelineChangeAnalysisService relevance;
     private final PipelineTriageApplicationService triage;
+    private final AxiomMetrics metrics;
+
+    @Autowired
+    public PipelineAnalysisOrchestrator(
+            PipelineAnalysisStateService state,
+            PipelineLogAnalysisService logs,
+            PipelineDiagnosisService diagnoses,
+            TestFailureCorrelationService correlations,
+            TestStabilitySnapshotService stability,
+            GitChangeIngestionService changes,
+            PipelineChangeAnalysisService relevance,
+            PipelineTriageApplicationService triage,
+            AxiomMetrics metrics) {
+        this.state = state;
+        this.logs = logs;
+        this.diagnoses = diagnoses;
+        this.correlations = correlations;
+        this.stability = stability;
+        this.changes = changes;
+        this.relevance = relevance;
+        this.triage = triage;
+        this.metrics = metrics;
+    }
 
     public PipelineAnalysisOrchestrator(
             PipelineAnalysisStateService state,
@@ -37,30 +65,39 @@ public class PipelineAnalysisOrchestrator {
             GitChangeIngestionService changes,
             PipelineChangeAnalysisService relevance,
             PipelineTriageApplicationService triage) {
-        this.state = state;
-        this.logs = logs;
-        this.diagnoses = diagnoses;
-        this.correlations = correlations;
-        this.stability = stability;
-        this.changes = changes;
-        this.relevance = relevance;
-        this.triage = triage;
+        this(
+                state,
+                logs,
+                diagnoses,
+                correlations,
+                stability,
+                changes,
+                relevance,
+                triage,
+                new AxiomMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
     public PipelineAnalysisResult analyze(UUID pipelineRunId, boolean recompute) {
+        Timer.Sample analysisTimer = metrics.start();
         state.requireRun(pipelineRunId);
         List<AnalysisStageResult> results = new ArrayList<>();
 
-        results.add(logStage(pipelineRunId, recompute));
-        results.add(diagnosisStage(pipelineRunId, recompute));
-        results.add(correlationStage(pipelineRunId, recompute));
-        results.add(stabilityStage(pipelineRunId, recompute));
-        results.add(changeIngestionStage(pipelineRunId, recompute));
-        results.add(relevanceStage(pipelineRunId, recompute));
-        results.add(triageStage(pipelineRunId, recompute));
+        results.add(measure(() -> logStage(pipelineRunId, recompute)));
+        results.add(measure(() -> diagnosisStage(pipelineRunId, recompute)));
+        results.add(measure(() -> correlationStage(pipelineRunId, recompute)));
+        results.add(measure(() -> stabilityStage(pipelineRunId, recompute)));
+        results.add(measure(() -> changeIngestionStage(pipelineRunId, recompute)));
+        results.add(measure(() -> relevanceStage(pipelineRunId, recompute)));
+        results.add(measure(() -> triageStage(pipelineRunId, recompute)));
 
-        return new PipelineAnalysisResult(
+        PipelineAnalysisResult result = new PipelineAnalysisResult(
                 pipelineRunId, recompute, results, state.hasCurrentTriage(pipelineRunId));
+        metrics.analysisCompleted(
+                analysisTimer,
+                results.stream().anyMatch(value -> value.status() == AnalysisStageStatus.FAILED)
+                        ? "partial_failure"
+                        : "completed");
+        return result;
     }
 
     private AnalysisStageResult logStage(UUID runId, boolean recompute) {
@@ -193,18 +230,28 @@ public class PipelineAnalysisOrchestrator {
     }
 
     private AnalysisStageResult execute(AnalysisStage stage, Operation operation, String message) {
+        AnalysisStageResult result;
         try {
             operation.run();
-            return AnalysisStageResult.completed(stage, message);
+            result = AnalysisStageResult.completed(stage, message);
         } catch (RuntimeException exception) {
             LOG.warn(
                     "pipeline_analysis_stage_failed stage={} errorType={} message={}",
                     stage,
                     exception.getClass().getSimpleName(),
                     safeMessage(exception));
-            return AnalysisStageResult.failed(
+            result = AnalysisStageResult.failed(
                     stage, safeMessage(exception), errorCode(exception));
         }
+        return result;
+    }
+
+    private AnalysisStageResult measure(StageOperation operation) {
+        Instant started = Instant.now();
+        AnalysisStageResult result = operation.run();
+        metrics.analysisStage(
+                result.stage(), result.status(), Duration.between(started, Instant.now()));
+        return result;
     }
 
     private String safeMessage(RuntimeException exception) {
@@ -225,5 +272,10 @@ public class PipelineAnalysisOrchestrator {
     @FunctionalInterface
     private interface Operation {
         Object run();
+    }
+
+    @FunctionalInterface
+    private interface StageOperation {
+        AnalysisStageResult run();
     }
 }

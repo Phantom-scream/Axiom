@@ -4,6 +4,7 @@ import com.axiom.api.error.ResourceNotFoundException;
 import com.axiom.application.analysis.PipelineTriageApplicationService;
 import com.axiom.domain.publication.GitHubPublication;
 import com.axiom.integrations.github.client.GitHubChecksClient;
+import com.axiom.observability.AxiomMetrics;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -15,18 +16,21 @@ public class GitHubTriageCheckPublisher {
     private final GitHubCheckRenderer renderer;
     private final GitHubChecksClient checks;
     private final GitHubPublicationPersistenceService publications;
+    private final AxiomMetrics metrics;
 
     public GitHubTriageCheckPublisher(
             JdbcTemplate jdbc,
             PipelineTriageApplicationService triage,
             GitHubCheckRenderer renderer,
             GitHubChecksClient checks,
-            GitHubPublicationPersistenceService publications) {
+            GitHubPublicationPersistenceService publications,
+            AxiomMetrics metrics) {
         this.jdbc = jdbc;
         this.triage = triage;
         this.renderer = renderer;
         this.checks = checks;
         this.publications = publications;
+        this.metrics = metrics;
     }
 
     public PublishResult publish(UUID pipelineRunId) {
@@ -46,6 +50,7 @@ public class GitHubTriageCheckPublisher {
                 Long.toString(response.id()),
                 response.htmlUrl(),
                 persistedTriage.triageVersion());
+        metrics.publication("check", existing.isPresent() ? "updated" : "created");
         return new PublishResult(
                 pipelineRunId,
                 publication.externalId(),

@@ -50,6 +50,10 @@ public class ApiExceptionHandler {
     ResponseEntity<ApiError> forbidden(GitHubIntegrationException e,HttpServletRequest r){return response(HttpStatus.FORBIDDEN,e.getMessage(),r,e instanceof GitHubRateLimitException?"GITHUB_RATE_LIMITED":"GITHUB_PERMISSION_DENIED");}
     @ExceptionHandler(ExternalProviderUnavailableException.class)
     ResponseEntity<ApiError> unavailable(ExternalProviderUnavailableException e,HttpServletRequest r){return response(HttpStatus.SERVICE_UNAVAILABLE,e.getMessage(),r,"EXTERNAL_PROVIDER_UNAVAILABLE");}
+    @ExceptionHandler(WebhookAuthenticationException.class)
+    ResponseEntity<ApiError> webhookAuthentication(WebhookAuthenticationException e,HttpServletRequest r){return response(HttpStatus.UNAUTHORIZED,e.getMessage(),r,"GITHUB_WEBHOOK_SIGNATURE_INVALID");}
+    @ExceptionHandler(WebhookPayloadTooLargeException.class)
+    ResponseEntity<ApiError> webhookPayloadTooLarge(WebhookPayloadTooLargeException e,HttpServletRequest r){return response(HttpStatus.PAYLOAD_TOO_LARGE,e.getMessage(),r,"GITHUB_WEBHOOK_PAYLOAD_TOO_LARGE");}
     @ExceptionHandler(Exception.class)
     ResponseEntity<ApiError> unexpected(Exception exception, HttpServletRequest request) {
         return response(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred.", request);

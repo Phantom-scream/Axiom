@@ -5,6 +5,7 @@ import com.axiom.api.error.ResourceNotFoundException;
 import com.axiom.application.analysis.PipelineTriageApplicationService;
 import com.axiom.domain.publication.GitHubPublication;
 import com.axiom.integrations.github.client.GitHubPullRequestClient;
+import com.axiom.observability.AxiomMetrics;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -16,18 +17,21 @@ public class GitHubPrTriagePublisher {
     private final GitHubPrCommentRenderer renderer;
     private final GitHubPullRequestClient pullRequests;
     private final GitHubPublicationPersistenceService publications;
+    private final AxiomMetrics metrics;
 
     public GitHubPrTriagePublisher(
             JdbcTemplate jdbc,
             PipelineTriageApplicationService triage,
             GitHubPrCommentRenderer renderer,
             GitHubPullRequestClient pullRequests,
-            GitHubPublicationPersistenceService publications) {
+            GitHubPublicationPersistenceService publications,
+            AxiomMetrics metrics) {
         this.jdbc = jdbc;
         this.triage = triage;
         this.renderer = renderer;
         this.pullRequests = pullRequests;
         this.publications = publications;
+        this.metrics = metrics;
     }
 
     public PublishResult publish(UUID pipelineRunId) {
@@ -50,6 +54,7 @@ public class GitHubPrTriagePublisher {
                 Long.toString(response.id()),
                 response.htmlUrl(),
                 persistedTriage.triageVersion());
+        metrics.publication("pr_comment", existing.isPresent() ? "updated" : "created");
         return new PublishResult(
                 pipelineRunId,
                 target.pullRequestNumber(),

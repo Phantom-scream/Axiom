@@ -17,4 +17,13 @@ public class GitHubActionsProvider implements CiProvider {
     @Override public PipelineRun fetchRun(String owner, String repository, long runId) { var jobs = fetchJobs(owner, repository, runId); return mapper.run(client.workflowRun(owner, repository, runId), owner, repository, jobs); }
     @Override public List<PipelineJob> fetchJobs(String owner, String repository, long runId) { return client.jobs(owner, repository, runId).stream().map(mapper::job).toList(); }
     @Override public byte[] downloadRunLogs(String owner, String repository, long runId) { return client.logs(owner, repository, runId); }
+    @Override public PipelineRun fetchRunAttempt(String owner, String repository, long runId, int attempt) {
+        var source = client.workflowRunAttempt(owner, repository, runId, attempt);
+        if (source.runAttempt() != attempt) throw new IllegalArgumentException("GitHub returned an unexpected workflow attempt.");
+        var jobs = client.attemptJobs(owner, repository, runId, attempt).stream().map(mapper::job).toList();
+        return mapper.run(source, owner, repository, jobs);
+    }
+    @Override public byte[] downloadRunAttemptLogs(String owner, String repository, long runId, int attempt) {
+        return client.attemptLogs(owner, repository, runId, attempt);
+    }
 }

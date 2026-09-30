@@ -15,7 +15,12 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
     private static final String HEADER = "X-Correlation-Id";
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
         String correlationId = request.getHeader(HEADER);
-        if (correlationId == null || correlationId.isBlank()) correlationId = UUID.randomUUID().toString();
+        if (correlationId == null
+                || correlationId.isBlank()
+                || correlationId.length() > 128
+                || !correlationId.matches("[A-Za-z0-9_.:-]+")) {
+            correlationId = UUID.randomUUID().toString();
+        }
         MDC.put("correlationId", correlationId); response.setHeader(HEADER, correlationId);
         try { chain.doFilter(request, response); } finally { MDC.remove("correlationId"); }
     }

@@ -12,6 +12,7 @@ import com.axiom.domain.triage.PipelineTriageResult;
 import com.axiom.domain.triage.RecommendedAction;
 import com.axiom.domain.triage.TriageEvidence;
 import com.axiom.domain.triage.TriageEvidencePriority;
+import com.axiom.observability.AxiomMetrics;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -32,6 +33,7 @@ public class PipelineTriageApplicationService {
     private final FailureFingerprintHistoryService fingerprintHistory;
     private final RerunAnalysisService rerunAnalysis;
     private final TriageProperties properties;
+    private final AxiomMetrics metrics;
 
     public PipelineTriageApplicationService(
             JdbcTemplate jdbc,
@@ -41,7 +43,8 @@ public class PipelineTriageApplicationService {
             ChangeRelevancePersistenceService relevancePersistence,
             FailureFingerprintHistoryService fingerprintHistory,
             RerunAnalysisService rerunAnalysis,
-            TriageProperties properties) {
+            TriageProperties properties,
+            AxiomMetrics metrics) {
         this.jdbc = jdbc;
         this.triage = triage;
         this.developerActions = developerActions;
@@ -50,6 +53,7 @@ public class PipelineTriageApplicationService {
         this.fingerprintHistory = fingerprintHistory;
         this.rerunAnalysis = rerunAnalysis;
         this.properties = properties;
+        this.metrics = metrics;
     }
 
     @Transactional
@@ -125,8 +129,10 @@ public class PipelineTriageApplicationService {
         List<RecommendedAction> actions = status.equals("COMPLETED")
                 ? developerActions.generate(result, relatedSourceFiles)
                 : List.of();
-        return persistence.save(
+        PipelineTriageResult persisted = persistence.save(
                 pipelineRunId, status, properties.effectiveVersion(), result, actions);
+        metrics.triageGenerated(status);
+        return persisted;
     }
 
     public PipelineTriageResult get(UUID pipelineRunId) {

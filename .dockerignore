@@ -1,6 +1,11 @@
 .git
 .gradle
-build
 .idea
-*.md
-
+.vscode
+build
+*.log
+.env
+.env.*
+!.env.production.example
+**/test-results
+**/reports

@@ -1,6 +1,6 @@
 # Axiom — CI Failure Intelligence
 
-Axiom is a foundation for explaining failed CI pipeline runs. It will normalize provider data, extract evidence from logs and metadata, classify likely causes, and later correlate tests, Git changes, historical failures, and infrastructure signals.
+Axiom explains failed CI pipeline runs using deterministic evidence. It can operate through explicit REST calls or automatically from signed GitHub workflow-run webhooks.
 
 ## Problem statement
 
@@ -8,7 +8,7 @@ CI failures are expensive to triage because their evidence is fragmented and pro
 
 ## Current scope
 
-Axiom ingests GitHub Actions runs and logs, extracts deterministic failure events, classifies them with explainable rules, and ingests framework-neutral JUnit XML. Structured failed tests are correlated to extracted failure events using conservative EXACT or STRONG evidence. Explicit workflow-attempt transitions support stability-v1 without treating unrelated runs or changed commits as unchanged reruns. GitHub Compare ingestion persists provider-neutral, categorized changed files without storing patches. Change-relevance-v1 combines those stored signals into an explainable result for each failure, and triage-v1 persists ranked failures, rerun guidance, and evidence-backed developer actions. The analysis remains deterministic and does not use AI.
+Axiom ingests GitHub Actions runs and logs, extracts deterministic failure events, classifies them with explainable rules, and ingests framework-neutral JUnit XML. Structured failed tests are correlated to extracted failure events using conservative EXACT or STRONG evidence. Explicit workflow-attempt transitions support stability-v1 without treating unrelated runs or changed commits as unchanged reruns. GitHub Compare ingestion persists provider-neutral, categorized changed files without storing patches. Change-relevance-v1 combines those stored signals into an explainable result for each failure, and triage-v1 persists ranked failures, rerun guidance, and evidence-backed developer actions. Signed, deduplicated webhooks can trigger the same ingestion and orchestration flow and optionally update GitHub Checks and PR reports. The analysis remains deterministic and does not use AI.
 
 ## Architecture and stack
 
@@ -49,7 +49,9 @@ Tests create their own PostgreSQL 17 container via Testcontainers; they do not n
 
 ## API endpoints
 
-`GET /api/v1/health` returns Axiom status and version. Actuator is available at `/actuator/health` and `/actuator/info`.
+`GET /api/v1/health` returns Axiom status and version. Actuator provides health, liveness,
+readiness, info, and Prometheus metrics at `/actuator/health`, `/actuator/health/liveness`,
+`/actuator/health/readiness`, `/actuator/info`, and `/actuator/prometheus`.
 
 `POST /api/v1/analysis/demo` is expressly demo-only. Example:
 
@@ -140,10 +142,17 @@ curl 'http://localhost:8080/api/v1/repositories/<repository-id>/health?days=30&m
 
 The response includes run outcomes, failure classifications, top fingerprints, rerun guidance, change relevance, and separate suspected-flaky, flaky, and consistently-failing test counts. Health requests never call GitHub or recompute analysis. See [pipeline health](docs/pipeline-health.md).
 
+For automatic operation, configure a signed GitHub `workflow_run` webhook at
+`POST /api/v1/webhooks/github`. Webhooks are disabled by default. Valid completed deliveries are
+durably deduplicated, placed on a bounded executor, ingested, and analyzed using the existing services.
+Automatic Check and PR publication are separate opt-in switches. See [GitHub webhooks](docs/github-webhooks.md),
+[production configuration](docs/production-configuration.md), [deployment](docs/deployment.md), and
+[operations](docs/operations.md).
+
 ## Project structure
 
 `domain` holds normalized concepts, `application` orchestration, `analysis` evidence/classification extensions, `integrations` provider adapters, `persistence` JPA mappings, and `api` transport concerns.
 
 ## Security notes
 
-Secrets are supplied only through environment variables and are never logged. Axiom does not persist Compare API patches, publish raw CI logs, or execute repository content. GitHub Check Markdown is escaped and bounded. The demo endpoint accepts bounded text only.
+Secrets are supplied only through environment variables and are never logged. Axiom does not persist Compare API patches or webhook payloads, publish raw CI logs, or execute repository content. Webhook signatures use constant-time HMAC comparison, external responses and published Markdown are bounded, and the production container runs as a non-root user. See [security](docs/security.md).

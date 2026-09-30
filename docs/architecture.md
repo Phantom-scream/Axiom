@@ -65,6 +65,16 @@ flowchart LR
   TDB --> RHS
   TS --> RHS
   RHS --> API
+  GH[GitHub workflow_run webhook] --> WH[Signature verification / deduplication]
+  WH --> WDB[(webhook deliveries)]
+  WH --> WQ[Bounded webhook executor]
+  WQ --> I
+  WQ --> PAO
+  WQ -. optional .-> GCP
+  WQ -. optional .-> PRP
+  PAO --> MET[Micrometer / Prometheus]
+  G --> MET
+  WH --> MET
 ```
 
 `CiProvider` is the seam for CI run integrations; `GitChangeProvider` is the separate provider-neutral seam for source changes. GitHub DTOs remain at the integration edge. `GitChangeIngestionService` resolves persisted base/head metadata, invokes the matching provider, classifies normalized files, and idempotently replaces V7 changed-file rows. Retrieval never calls GitHub implicitly.
@@ -82,3 +92,13 @@ GitHub delivery is a separate explicit edge. `GitHubTriageCheckPublisher` reads 
 `GitHubPrTriagePublisher` uses the same persisted triage and safe renderer to create or update one marker-bearing issue comment. Publication lookup first uses the pipeline run and then the repository/PR identity, so later attempts update the tracked discussion entry rather than adding comment spam. PR publishing remains explicit and never invokes analysis.
 
 `RepositoryHealthService` performs a fixed number of grouped PostgreSQL queries over a run-ID window limited by both age and count. It reads stored diagnoses, fingerprints, triage, relevance, and stability snapshots without calling providers or recomputing derived analysis.
+
+The production automation edge verifies GitHub HMAC signatures before parsing, claims the unique
+delivery ID in PostgreSQL, and submits completed workflow runs to a bounded application executor.
+Workers reuse `PipelineIngestionService` and `PipelineAnalysisOrchestrator`; they never duplicate core
+analysis rules. V13 records delivery state but not payloads. Automatic publishers are independently
+configured and disabled by default, and publication failures cannot erase completed analysis.
+
+GitHub transport uses centralized connect/read/request timeouts, bounded retry/backoff for safe
+GET/PATCH operations, rate-limit metadata, and low-cardinality metrics. Actuator exposes only health,
+info, and Prometheus. The production container is a non-root multi-stage image.
