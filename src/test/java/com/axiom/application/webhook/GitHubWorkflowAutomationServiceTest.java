@@ -39,7 +39,7 @@ class GitHubWorkflowAutomationServiceTest {
         verify(orchestrator).analyze(runId, false);
         verify(checks, never()).publish(any());
         verify(comments, never()).publish(any());
-        verify(deliveries).complete("delivery", "COMPLETED", null, null);
+        verify(deliveries).finish("delivery", "COMPLETED", null, null, false);
     }
 
     @Test
@@ -50,7 +50,7 @@ class GitHubWorkflowAutomationServiceTest {
 
         verify(checks).publish(runId);
         verify(comments).publish(runId);
-        verify(deliveries).complete("delivery", "COMPLETED", null, null);
+        verify(deliveries).finish("delivery", "COMPLETED", null, null, false);
     }
 
     @Test
@@ -61,14 +61,16 @@ class GitHubWorkflowAutomationServiceTest {
 
         verify(orchestrator).analyze(runId, false);
         verify(deliveries)
-                .complete(
+                .finish(
                         eq("delivery"),
                         eq("COMPLETED_WITH_PUBLICATION_FAILURE"),
                         eq("PUBLICATION_FAILED"),
-                        any());
+                        any(), eq(false));
     }
 
     private GitHubWorkflowAutomationService service(boolean autoCheck, boolean autoComment) {
+        org.mockito.Mockito.doAnswer(call -> { call.getArgument(1, Runnable.class).run(); return null; })
+                .when(deliveries).runClaimed(any(), any());
         when(ingestion.ingest(any()))
                 .thenReturn(new PersistedPipelineRun(runId, 1, 1, 1, Instant.now()));
         when(orchestrator.analyze(runId, false))
@@ -95,13 +97,21 @@ class GitHubWorkflowAutomationServiceTest {
                 new AxiomMetrics(new SimpleMeterRegistry()));
     }
 
+    @Test void ambiguousCreateIsNotRepeatedWhenAnotherPublisherHasTransientFailure() {
+        when(checks.publish(runId)).thenThrow(new com.axiom.integrations.github.exception.GitHubPublicationOutcomeUnknownException());
+        when(comments.publish(runId)).thenThrow(new com.axiom.integrations.github.exception.ExternalProviderUnavailableException());
+        service(true,true).process(command());
+        verify(deliveries).finish(eq("delivery"),eq("COMPLETED_WITH_PUBLICATION_FAILURE"),eq("PUBLICATION_FAILED"),any(),eq(false));
+        verify(orchestrator).analyze(runId,false);
+    }
+
     @Test
     void providerFailureIsRecordedWithoutCallingAnalysisOrLeakingMessages() {
         var service = service(false, false);
         when(ingestion.ingest(any())).thenThrow(new com.axiom.integrations.github.exception.GitHubRateLimitException());
         service.process(command());
         verify(orchestrator, never()).analyze(any(), eq(false));
-        verify(deliveries).complete("delivery", "FAILED", "GitHubRateLimitException", "GitHubRateLimitException");
+        verify(deliveries).finish("delivery", "FAILED", "GitHubRateLimitException", "GitHubRateLimitException", true);
     }
 
     @Test
@@ -111,7 +121,7 @@ class GitHubWorkflowAutomationServiceTest {
                 List.of(com.axiom.domain.analysis.AnalysisStageResult.failed(
                         com.axiom.domain.analysis.AnalysisStage.TRIAGE, "safe error", "TRIAGE_FAILED")), false));
         service.process(command());
-        verify(deliveries).complete(eq("delivery"), eq("COMPLETED_WITH_STAGE_FAILURE"), eq("ANALYSIS_STAGE_FAILED"), any());
+        verify(deliveries).finish(eq("delivery"), eq("COMPLETED_WITH_STAGE_FAILURE"), eq("ANALYSIS_STAGE_FAILED"), any(), eq(true));
         verify(checks, never()).publish(any());
         verify(comments, never()).publish(any());
     }

@@ -46,42 +46,47 @@ public class GitHubWorkflowAutomationService {
     }
 
     public void process(WorkflowRunCommand command) {
+        deliveries.runClaimed(command, () -> processClaimed(command));
+    }
+
+    private void processClaimed(WorkflowRunCommand command) {
         Instant started = Instant.now();
         MDC.put("webhookDeliveryId", command.deliveryId());
         try {
-            deliveries.processing(command.deliveryId());
-            var run = ingestion.ingest(new PipelineRunReference(
+            java.util.UUID runId = deliveries.persistedRun(command.deliveryId()).orElseGet(() -> ingestion.ingest(new PipelineRunReference(
                     CiProviderType.GITHUB_ACTIONS,
                     command.owner(),
                     command.repository(),
-                    command.externalRunId(), command.runAttempt()));
-            deliveries.pipelineRun(command.deliveryId(), run.id());
-            MDC.put("pipelineRunId", run.id().toString());
-            var analysis = orchestrator.analyze(run.id(), false);
+                    command.externalRunId(), command.runAttempt())).id());
+            deliveries.pipelineRun(command.deliveryId(), runId);
+            MDC.put("pipelineRunId", runId.toString());
+            var analysis = orchestrator.analyze(runId, false);
             boolean partialFailure = analysis.stages().stream()
                     .anyMatch(stage -> stage.status() == AnalysisStageStatus.FAILED);
-            String publicationError = analysis.triageAvailable() ? publish(run.id()) : null;
+            var publication = analysis.triageAvailable() ? publish(runId) : new PublicationOutcome(null,false,false);
+            String publicationError = publication.error();
             String status = publicationError != null
                     ? "COMPLETED_WITH_PUBLICATION_FAILURE"
                     : partialFailure ? "COMPLETED_WITH_STAGE_FAILURE" : "COMPLETED";
-            deliveries.complete(
+            deliveries.finish(
                     command.deliveryId(),
                     status,
                     publicationError != null ? "PUBLICATION_FAILED" : partialFailure ? "ANALYSIS_STAGE_FAILED" : null,
-                    publicationError != null ? publicationError : partialFailure ? "One or more analysis stages failed; inspect stage results." : null);
+                    publicationError != null ? publicationError : partialFailure ? "One or more analysis stages failed; inspect stage results." : null,
+                    !publication.permanentFailure() && (partialFailure || publication.retryable()));
             if (partialFailure || publicationError != null) metrics.webhook("failed");
             metrics.webhookDuration(status.toLowerCase(), Duration.between(started, Instant.now()));
             LOG.info(
                     "github_webhook_processing_completed deliveryId={} pipelineRunId={} status={}",
                     command.deliveryId(),
-                    run.id(),
+                    runId,
                     status);
         } catch (RuntimeException exception) {
-            deliveries.complete(
+            deliveries.finish(
                     command.deliveryId(),
                     "FAILED",
                     exception.getClass().getSimpleName(),
-                    safeMessage(exception));
+                    safeMessage(exception), retryable(exception));
             metrics.webhook("failed");
             metrics.webhookDuration("failed", Duration.between(started, Instant.now()));
             LOG.warn(
@@ -95,13 +100,24 @@ public class GitHubWorkflowAutomationService {
         }
     }
 
-    private String publish(java.util.UUID pipelineRunId) {
+    private boolean retryable(RuntimeException exception) {
+        return exception instanceof com.axiom.integrations.github.exception.GitHubRateLimitException
+                || exception instanceof org.springframework.dao.TransientDataAccessException
+                || exception instanceof org.springframework.dao.DataAccessResourceFailureException
+                || (exception instanceof com.axiom.integrations.github.exception.ExternalProviderUnavailableException unavailable && unavailable.retryable());
+    }
+
+    private PublicationOutcome publish(java.util.UUID pipelineRunId) {
         String error = null;
+        boolean retry = false;
+        boolean permanentFailure = false;
         if (properties.autoPublishCheckEnabled()) {
             try {
                 checkPublisher.publish(pipelineRunId);
             } catch (RuntimeException exception) {
                 error = "GitHub Check: " + safeMessage(exception);
+                retry = retryable(exception);
+                permanentFailure = !retry;
             }
         }
         if (properties.autoPublishPrCommentEnabled()) {
@@ -111,10 +127,14 @@ public class GitHubWorkflowAutomationService {
                 LOG.info("github_pr_publication_skipped pipelineRunId={} reason=no_pull_request", pipelineRunId);
             } catch (RuntimeException exception) {
                 error = append(error, "PR comment: " + safeMessage(exception));
+                retry = retry || retryable(exception);
+                permanentFailure = permanentFailure || !retryable(exception);
             }
         }
-        return error;
+        return new PublicationOutcome(error,retry,permanentFailure);
     }
+
+    private record PublicationOutcome(String error,boolean retryable,boolean permanentFailure) {}
 
     private String append(String current, String next) {
         return current == null ? next : current + "; " + next;

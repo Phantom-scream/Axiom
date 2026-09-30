@@ -14,9 +14,17 @@ credential-free redirects described above. Tokens and webhook secrets are
 never persisted or logged. Published reports remain escaped, deterministic summaries and exclude raw
 logs and stack traces. Actuator exposure is restricted to health, info, and Prometheus metrics.
 
-Authentication of existing management/analysis APIs is not redesigned in this phase. Deploy behind
-TLS ingress with operator access restrictions; expose only the signed webhook publicly and keep
-Prometheus and explicit publishing endpoints on a protected operational network.
+Operator APIs and Prometheus/info endpoints require `X-Axiom-Api-Key` when
+`AXIOM_API_SECURITY_ENABLED=true`. Production-profile defaults and the production example enable
+this; startup fails without a key. Keys are compared in constant time, never logged/persisted/tagged,
+and must be supplied over TLS. Public paths are exactly the webhook, `/api/v1/health`, and Actuator
+health/liveness/readiness. Webhook HMAC is independent of operator authentication. Local defaults
+disable key protection for development; do not use those defaults on public ingress.
+
+Operator keys must contain 16–4096 characters; use at least 32 cryptographically random bytes for production.
+
+This is service/operator authentication, not per-user or per-repository authorization. Rotate keys
+through deployment configuration, restrict operator network access, and disable request/header tracing.
 
 The production image runs as the unprivileged `axiom` user. Run dependency update checks through
 Dependabot (`.github/dependabot.yml`) and, where available, the organization-approved dependency

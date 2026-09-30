@@ -31,6 +31,22 @@ info:
     name: Axiom
     version: ${AXIOM_VERSION:0.1.0-SNAPSHOT}
 axiom:
+  history:
+    max-days: ${AXIOM_HISTORY_MAX_DAYS:730}
+    max-runs: ${AXIOM_HISTORY_MAX_RUNS:1000}
+    max-results: ${AXIOM_HISTORY_MAX_RESULTS:100}
+    active-recent-runs: ${AXIOM_HISTORY_ACTIVE_RECENT_RUNS:5}
+    resolved-clean-runs: ${AXIOM_HISTORY_RESOLVED_CLEAN_RUNS:3}
+    minimum-recurring-runs: ${AXIOM_HISTORY_MINIMUM_RECURRING_RUNS:2}
+  api-security:
+    enabled: ${AXIOM_API_SECURITY_ENABLED:false}
+    key: ${AXIOM_API_KEY:}
+  webhook-recovery:
+    batch-size: ${AXIOM_WEBHOOK_RECOVERY_BATCH_SIZE:10}
+    max-attempts: ${AXIOM_WEBHOOK_PROCESSING_MAX_ATTEMPTS:5}
+    initial-backoff-seconds: ${AXIOM_WEBHOOK_PROCESSING_BACKOFF_SECONDS:30}
+    stale-seconds: ${AXIOM_WEBHOOK_STALE_SECONDS:600}
+    poll-milliseconds: ${AXIOM_WEBHOOK_RECOVERY_POLL_MILLISECONDS:10000}
   rerun-history:
     max-executions: ${AXIOM_RERUN_HISTORY_MAX_EXECUTIONS:1000}
   change-analysis:

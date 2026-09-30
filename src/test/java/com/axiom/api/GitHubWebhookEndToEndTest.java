@@ -28,9 +28,11 @@ class GitHubWebhookEndToEndTest extends IntegrationTestSupport {
     private static final AtomicInteger creates = new AtomicInteger();
     private static final AtomicInteger updates = new AtomicInteger();
     private static final java.util.concurrent.atomic.AtomicBoolean failWrites = new java.util.concurrent.atomic.AtomicBoolean();
+    private static final AtomicInteger failureStatus = new AtomicInteger(403);
     private static final HttpServer github = startGitHub();
     @Autowired private MockMvc mvc;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private com.axiom.application.webhook.GitHubWebhookRecoveryWorker recovery;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
@@ -68,6 +70,21 @@ class GitHubWebhookEndToEndTest extends IntegrationTestSupport {
         deliver("full-flow-publication-failure");
         awaitOutcome("full-flow-publication-failure", "COMPLETED_WITH_PUBLICATION_FAILURE");
         assertThat(count("pipeline_triage_results", "pipeline_run_id in (select id from pipeline_runs where external_run_id=887766)")).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select next_attempt_at is null from github_webhook_deliveries where delivery_id='full-flow-publication-failure'",Boolean.class)).isTrue();
+        failureStatus.set(503);
+        deliver("full-flow-transient-publication");
+        awaitOutcome("full-flow-transient-publication","COMPLETED_WITH_PUBLICATION_FAILURE");
+        long waitUntil=System.nanoTime()+Duration.ofSeconds(3).toNanos();
+        while(!Boolean.TRUE.equals(jdbc.queryForObject("select next_attempt_at is not null from github_webhook_deliveries where delivery_id='full-flow-transient-publication'",Boolean.class)) && System.nanoTime()<waitUntil) Thread.sleep(25);
+        assertThat(jdbc.queryForObject("select next_attempt_at is not null from github_webhook_deliveries where delivery_id='full-flow-transient-publication'",Boolean.class)).isTrue();
+        int failuresBefore=count("failure_events","pipeline_run_id in (select id from pipeline_runs where external_run_id=887766)");
+        failWrites.set(false);
+        jdbc.update("update github_webhook_deliveries set next_attempt_at=current_timestamp-interval '1 second' where delivery_id='full-flow-transient-publication'");
+        recovery.recover();
+        awaitOutcome("full-flow-transient-publication","COMPLETED");
+        assertThat(jdbc.queryForObject("select attempt_count from github_webhook_deliveries where delivery_id='full-flow-transient-publication'",Integer.class)).isEqualTo(2);
+        assertThat(count("failure_events","pipeline_run_id in (select id from pipeline_runs where external_run_id=887766)")).isEqualTo(failuresBefore);
+        assertThat(creates.get()).isEqualTo(2);
     }
 
     private int count(String table, String where) {
@@ -83,7 +100,7 @@ class GitHubWebhookEndToEndTest extends IntegrationTestSupport {
         String state;
         do {
             state = jdbc.queryForObject("select status from github_webhook_deliveries where delivery_id=?", String.class, delivery);
-            if (state.startsWith("COMPLETED") || state.equals("FAILED")) break;
+            if (state.equals(expected) || state.equals("FAILED")) break;
             Thread.sleep(50);
         } while (System.nanoTime() < deadline);
         assertThat(state).as("delivery %s processing outcome", delivery).isEqualTo(expected);
@@ -122,7 +139,7 @@ class GitHubWebhookEndToEndTest extends IntegrationTestSupport {
                     else if (exchange.getRequestMethod().equals("PATCH")) updates.incrementAndGet();
                     exchange.getRequestBody().readAllBytes();
                     response = "{\"id\":4242,\"html_url\":\"https://github.com/mock/report\"}";
-                    if (failWrites.get()) status = 403;
+                    if (failWrites.get()) status = failureStatus.get();
                 } else {
                     status = 404;
                     response = "{}";

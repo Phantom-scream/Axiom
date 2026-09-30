@@ -13,7 +13,7 @@ class FlywayMigrationIntegrationTest extends IntegrationTestSupport {
             var result = statement.executeQuery(); result.next(); assertThat(result.getInt(1)).isEqualTo(1);
         }
     }
-    @Test void migrationsReachV13WithAnalysisPublicationAndWebhookState() throws Exception {
+    @Test void migrationsReachCurrentVersionWithAnalysisPublicationAndWebhookState() throws Exception {
         try (var connection = dataSource.getConnection();
                 var versionStatement = connection.prepareStatement(
                         "select max(version::integer) from flyway_schema_history where success");
@@ -25,7 +25,7 @@ class FlywayMigrationIntegrationTest extends IntegrationTestSupport {
                         """)) {
             var version = versionStatement.executeQuery();
             version.next();
-            assertThat(version.getInt(1)).isEqualTo(13);
+            assertThat(version.getInt(1)).isEqualTo(14);
             var columns = columnStatement.executeQuery();
             columns.next();
             assertThat(columns.getInt(1)).isEqualTo(2);

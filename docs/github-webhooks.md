@@ -21,7 +21,16 @@ silently analyzes a newer attempt. Signature comparison is constant-time.
 Completed `workflow_run` events are submitted to a bounded in-process executor. The worker reuses
 pipeline ingestion and `PipelineAnalysisOrchestrator`. Status moves through `ACCEPTED`, `PROCESSING`,
 and `COMPLETED`, with explicit partial/publication failure states. This single-instance queue is
-appropriate to the current modular monolith; queued work is not durable across a process crash.
+backed by the durable PostgreSQL ledger. Accepted work and stale processing recover after a restart.
+Queue saturation does not discard accepted work. Atomic claims and session advisory locks prevent
+concurrent execution across instances, including different delivery IDs for the same workflow attempt.
+The RECEIVED-to-ACCEPTED work-identity write is one transaction; only committed ACCEPTED work is scheduled.
+Processing records attempt count, timestamps, bounded retry timing, and sanitized errors. Duplicate
+IDs reuse one ledger item; recovery can retry that item safely up to its configured limit.
+
+Recoverable publication errors retain completed analysis, retry using persisted run/triage/publication
+identities, and do not duplicate derived rows. Permanent permission failures are not automatically
+retried. See [operations](operations.md) for recovery, stale detection, and pool requirements.
 
 Automatic Checks and PR comments are independent and disabled by default. Enable them with the two
 `AXIOM_GITHUB_AUTO_PUBLISH_*` variables. Checks require Checks write permission; PR comments require

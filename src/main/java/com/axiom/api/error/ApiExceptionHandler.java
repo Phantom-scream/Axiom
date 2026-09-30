@@ -17,6 +17,11 @@ import com.axiom.integrations.github.exception.*;
 public class ApiExceptionHandler {
     private final Clock clock;
     public ApiExceptionHandler(Clock clock) { this.clock = clock; }
+    @ExceptionHandler({org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
+        org.springframework.web.bind.MissingRequestHeaderException.class,org.springframework.web.bind.MissingServletRequestParameterException.class})
+    ResponseEntity<ApiError> invalidParameter(Exception exception,HttpServletRequest request) {
+        return response(HttpStatus.BAD_REQUEST,"A required request parameter or header is missing or invalid.",request,"INVALID_REQUEST_PARAMETER");
+    }
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<ApiError> validation(MethodArgumentNotValidException exception, HttpServletRequest request) {
         String message = exception.getBindingResult().getFieldErrors().stream().findFirst().map(FieldError::getDefaultMessage).orElse("Request validation failed");
@@ -50,6 +55,8 @@ public class ApiExceptionHandler {
     ResponseEntity<ApiError> forbidden(GitHubIntegrationException e,HttpServletRequest r){return response(HttpStatus.FORBIDDEN,e.getMessage(),r,e instanceof GitHubRateLimitException?"GITHUB_RATE_LIMITED":"GITHUB_PERMISSION_DENIED");}
     @ExceptionHandler(ExternalProviderUnavailableException.class)
     ResponseEntity<ApiError> unavailable(ExternalProviderUnavailableException e,HttpServletRequest r){return response(HttpStatus.SERVICE_UNAVAILABLE,e.getMessage(),r,"EXTERNAL_PROVIDER_UNAVAILABLE");}
+    @ExceptionHandler(GitHubPublicationOutcomeUnknownException.class)
+    ResponseEntity<ApiError> publicationUncertain(GitHubPublicationOutcomeUnknownException e,HttpServletRequest r){return response(HttpStatus.BAD_GATEWAY,e.getMessage(),r,"GITHUB_PUBLICATION_OUTCOME_UNKNOWN");}
     @ExceptionHandler(WebhookAuthenticationException.class)
     ResponseEntity<ApiError> webhookAuthentication(WebhookAuthenticationException e,HttpServletRequest r){return response(HttpStatus.UNAUTHORIZED,e.getMessage(),r,"GITHUB_WEBHOOK_SIGNATURE_INVALID");}
     @ExceptionHandler(WebhookPayloadTooLargeException.class)

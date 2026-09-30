@@ -93,6 +93,24 @@ public class RerunAnalysisService {
         return List.copyOf(transitions);
     }
 
+    /** Batch historical view restricted to an already bounded repository run window. */
+    public java.util.Map<String,List<RerunTransition>> transitionsForRuns(java.util.Set<String> stableIds,List<UUID> runIds) {
+        if(stableIds.isEmpty() || runIds.isEmpty()) return java.util.Map.of();
+        if(stableIds.size()>100 || runIds.size()>10000) throw new IllegalArgumentException("Rerun batch exceeds the bounded history window.");
+        String tests=String.join(",",java.util.Collections.nCopies(stableIds.size(),"?"));
+        String runs=String.join(",",java.util.Collections.nCopies(runIds.size(),"?"));
+        var args=new ArrayList<Object>();args.addAll(stableIds);args.addAll(runIds);
+        var executions=jdbc.query("""
+                select distinct on (t.stable_test_id,pr.external_run_id,pr.attempt)
+                  t.pipeline_run_id,t.stable_test_id,pr.external_run_id,pr.attempt,pr.commit_sha,t.status,t.failure_fingerprint
+                from test_case_executions t join pipeline_runs pr on pr.id=t.pipeline_run_id
+                where t.stable_test_id in (%s) and pr.id in (%s)
+                order by t.stable_test_id,pr.external_run_id,pr.attempt,t.created_at desc,t.id
+                """.formatted(tests,runs),(rs,row)->new Execution(rs.getObject("pipeline_run_id",UUID.class),rs.getString("stable_test_id").trim(),rs.getLong("external_run_id"),rs.getInt("attempt"),rs.getString("commit_sha"),TestStatus.valueOf(rs.getString("status")),rs.getString("failure_fingerprint")),args.toArray());
+        var grouped=executions.stream().collect(java.util.stream.Collectors.groupingBy(Execution::stableTestId));
+        var result=new java.util.HashMap<String,List<RerunTransition>>(); grouped.forEach((id,values)->result.put(id,analyze(values)));return java.util.Map.copyOf(result);
+    }
+
     private RerunTransitionType transitionType(Execution from, Execution to, boolean sameCommit) {
         if (!sameCommit) return RerunTransitionType.UNKNOWN;
         if (from.status() == TestStatus.FAILED && to.status() == TestStatus.PASSED) {

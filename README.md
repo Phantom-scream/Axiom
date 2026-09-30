@@ -1,6 +1,6 @@
 # Axiom — CI Failure Intelligence
 
-Axiom explains failed CI pipeline runs using deterministic evidence. It can operate through explicit REST calls or automatically from signed GitHub workflow-run webhooks.
+Axiom is a GitHub-native CI Failure Intelligence backend that turns logs, test reports, workflow attempts, code changes, and cross-run history into evidence-backed investigation priorities and rerun guidance. It operates through REST or signed GitHub webhooks and delivers deterministic reports through Checks and PR comments. Its reasoning is rule-based and explainable: no AI, machine learning, or probabilistic root-cause predictions.
 
 ## Problem statement
 
@@ -13,6 +13,12 @@ Axiom ingests GitHub Actions runs and logs, extracts deterministic failure event
 ## Architecture and stack
 
 It is a modular monolith: domain concepts are provider-neutral; application services orchestrate use cases; integrations adapt external systems; persistence entities stay behind repositories; controllers handle HTTP only. Stack: Java 25, Spring Boot 4.1.1, Gradle, PostgreSQL 17, Flyway, JPA, WebClient, Resilience4j, Jackson, and Testcontainers. See [architecture](docs/architecture.md).
+
+Historical intelligence adds bounded failure lifecycles, recurring incidents, UTC daily/weekly trends,
+test-reliability views, and module/change associations. Accepted webhook work survives restarts through
+PostgreSQL-backed claims and bounded recovery retries; operator APIs support static API-key protection.
+See [historical intelligence](docs/historical-intelligence.md), [design decisions](docs/design-decisions.md),
+[demo](docs/demo.md), [testing strategy](docs/testing-strategy.md), and [limitations](docs/limitations.md).
 
 ## Requirements
 
@@ -46,6 +52,33 @@ docker compose config
 ```
 
 Tests create their own PostgreSQL 17 container via Testcontainers; they do not need the Compose database.
+
+Phase 12 verification includes the full original 161-test regression baseline plus PostgreSQL claim
+concurrency, recovery, operator authentication, and cross-run historical fixtures. No live GitHub token
+is required for automated tests; mocked HTTP validation is not live GitHub validation.
+
+## Docker quick start and operator authentication
+
+```bash
+cp .env.production.example .env.production
+chmod 600 .env.production
+# Replace database password, operator API key and webhook-secret placeholders first.
+docker compose --env-file .env.production --profile application up -d --build
+```
+
+The production profile enables operator protection by default and fails without `AXIOM_API_KEY`.
+The production example also enables it explicitly. Local defaults disable it; set
+`AXIOM_API_SECURITY_ENABLED=true` and send `X-Axiom-Api-Key` on operator/API and metrics requests.
+Public health probes remain inexpensive; the webhook uses HMAC instead of the operator key.
+Never enable shell tracing around credential-bearing commands.
+
+```bash
+curl -H "X-Axiom-Api-Key: ${AXIOM_API_KEY}" \
+  'http://localhost:8080/api/v1/repositories/<repository-id>/trends?days=90&granularity=WEEK&maxRuns=500'
+```
+
+All five historical endpoints are documented in [historical intelligence](docs/historical-intelligence.md).
+Every response identifies its sampled window; metrics describe observations, not forecasts or author blame.
 
 ## API endpoints
 

@@ -86,33 +86,19 @@ public class GitHubWebhookService {
             return new Receipt(deliveryId, event, "IGNORED", false);
         }
 
-        boolean inserted = deliveries.accept(
-                deliveryId,
-                event,
-                fullName,
-                payload.workflowRun().id(),
-                "ACCEPTED");
+        var command = new GitHubWorkflowAutomationService.WorkflowRunCommand(deliveryId,
+                payload.repository().owner().login(),payload.repository().name(),payload.workflowRun().id(),
+                Math.max(1,payload.workflowRun().runAttempt()),payload.workflowRun().pullRequests()!=null && !payload.workflowRun().pullRequests().isEmpty());
+        boolean inserted = deliveries.acceptWorkflow(command);
         if (!inserted) {
             metrics.webhook("duplicate");
             return new Receipt(deliveryId, event, "DUPLICATE", true);
         }
         try {
-            executor.execute(() -> automation.process(new GitHubWorkflowAutomationService.WorkflowRunCommand(
-                    deliveryId,
-                    payload.repository().owner().login(),
-                    payload.repository().name(),
-                    payload.workflowRun().id(),
-                    Math.max(1, payload.workflowRun().runAttempt()),
-                    payload.workflowRun().pullRequests() != null
-                            && !payload.workflowRun().pullRequests().isEmpty())));
+            executor.execute(() -> automation.process(command));
         } catch (RejectedExecutionException exception) {
-            deliveries.complete(
-                    deliveryId,
-                    "FAILED",
-                    "WEBHOOK_QUEUE_FULL",
-                    "Webhook processing capacity is currently exhausted.");
-            metrics.webhook("failed");
-            throw new ExternalProviderUnavailableException();
+            // Already durably accepted: the recovery scheduler will submit it later.
+            metrics.webhook("recovered");
         }
         metrics.webhook("accepted");
         return new Receipt(deliveryId, event, "ACCEPTED", false);

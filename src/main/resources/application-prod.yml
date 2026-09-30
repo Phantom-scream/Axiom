@@ -11,3 +11,6 @@ management:
   endpoint:
     health:
       show-details: never
+axiom:
+  api-security:
+    enabled: ${AXIOM_API_SECURITY_ENABLED:true}

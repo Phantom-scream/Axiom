@@ -67,6 +67,8 @@ flowchart LR
   RHS --> API
   GH[GitHub workflow_run webhook] --> WH[Signature verification / deduplication]
   WH --> WDB[(webhook deliveries)]
+  WDB --> REC[Bounded recovery poll / PostgreSQL advisory claims]
+  REC --> WQ
   WH --> WQ[Bounded webhook executor]
   WQ --> I
   WQ --> PAO
@@ -75,6 +77,13 @@ flowchart LR
   PAO --> MET[Micrometer / Prometheus]
   G --> MET
   WH --> MET
+  DB --> HIST[Bounded historical SQL views]
+  HIST --> LIFE[Lifecycle / recurring incidents]
+  HIST --> TREND[UTC repository trends]
+  HIST --> REL[Test reliability / module associations]
+  LIFE --> API
+  TREND --> API
+  REL --> API
 ```
 
 `CiProvider` is the seam for CI run integrations; `GitChangeProvider` is the separate provider-neutral seam for source changes. GitHub DTOs remain at the integration edge. `GitChangeIngestionService` resolves persisted base/head metadata, invokes the matching provider, classifies normalized files, and idempotently replaces V7 changed-file rows. Retrieval never calls GitHub implicitly.
@@ -102,3 +111,25 @@ configured and disabled by default, and publication failures cannot erase comple
 GitHub transport uses centralized connect/read/request timeouts, bounded retry/backoff for safe
 GET/PATCH operations, rate-limit metadata, and low-cardinality metrics. Actuator exposes only health,
 info, and Prometheus. The production container is a non-root multi-stage image.
+
+## Final Phase 1–12 lifecycle and entities
+
+`repositories` → attempt-aware `pipeline_runs` → jobs/steps/raw log storage → normalized
+`failure_events` and `failure_diagnoses` → structured `test_case_executions`/correlation and
+`test_stability_snapshots` → provider-neutral `git_change_sets`/`changed_files` →
+`change_relevance_results`/evidence/related-file associations → persisted triage/rankings/evidence/actions.
+`PipelineAnalysisOrchestrator` coordinates these versioned stages and preserves partial outcomes.
+
+Publishing reads triage only, renders bounded deterministic output, and tracks external identities in
+`github_publications`. Signed webhook receipt persists validated command identity in
+`github_webhook_deliveries`; V14 adds claim/attempt/retry timestamps and bounded recovery indexing.
+Recovery polls submit work to the same executor, and PostgreSQL session locks prevent concurrent
+delivery/workflow-attempt execution across instances. Operator API authentication is an independent
+filter; HMAC remains the public webhook boundary.
+
+Historical services query one chronology-bounded repository run sample using SQL grouping/projections.
+They reuse fingerprint/test identities, persisted classifications/relevance/stability, and rerun
+analysis without changing algorithms or recalculating analysis. DTO responses expose sample windows;
+lifecycle/trend/hotspot labels describe observations, never predictions or causal ownership.
+See [historical intelligence](historical-intelligence.md), [design decisions](design-decisions.md), and
+[limitations](limitations.md).

@@ -264,12 +264,16 @@ public class GitHubApiClient {
                     .bodyToMono(type)
                     .block(properties.effectiveRequestTimeout());
         } catch (GitHubIntegrationException exception) {
+            if (method == HttpMethod.POST && exception instanceof ExternalProviderUnavailableException)
+                throw new com.axiom.integrations.github.exception.GitHubPublicationOutcomeUnknownException();
             throw exception;
         } catch (WebClientRequestException exception) {
+            if (method == HttpMethod.POST) throw new com.axiom.integrations.github.exception.GitHubPublicationOutcomeUnknownException();
             throw new ExternalProviderUnavailableException();
         } catch (IllegalStateException exception) {
             if (exception.getMessage() != null
                     && exception.getMessage().contains("Timeout on blocking read")) {
+                if (method == HttpMethod.POST) throw new com.axiom.integrations.github.exception.GitHubPublicationOutcomeUnknownException();
                 throw new ExternalProviderUnavailableException();
             }
             throw exception;

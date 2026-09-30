@@ -47,6 +47,7 @@ class GitHubWebhookServiceTest {
     void acceptsCompletedWorkflowAndSchedulesAutomation() throws Exception {
         byte[] body = completedPayload();
         when(deliveries.accept(any(), any(), any(), any(), any())).thenReturn(true);
+        when(deliveries.acceptWorkflow(any())).thenReturn(true);
 
         var receipt = service.receive("workflow_run", "delivery-1", sign(body), body);
 
@@ -59,6 +60,7 @@ class GitHubWebhookServiceTest {
     void duplicateAndUnsupportedDeliveriesAreIdempotent() throws Exception {
         byte[] body = completedPayload();
         when(deliveries.accept(any(), any(), any(), any(), any())).thenReturn(false);
+        when(deliveries.acceptWorkflow(any())).thenReturn(false);
 
         assertThat(service.receive("workflow_run", "delivery-2", sign(body), body).duplicate())
                 .isTrue();
@@ -110,12 +112,11 @@ class GitHubWebhookServiceTest {
                 JsonMapper.builder().findAndAddModules().build(),
                 task -> { throw new java.util.concurrent.RejectedExecutionException(); },
                 new AxiomMetrics(new SimpleMeterRegistry()));
-        when(deliveries.accept(any(), any(), any(), any(), any())).thenReturn(true);
+        when(deliveries.acceptWorkflow(any())).thenReturn(true);
         byte[] body = completedPayload();
-        assertThatThrownBy(() -> rejecting.receive("workflow_run", "full-queue", sign(body), body))
-                .isInstanceOf(com.axiom.integrations.github.exception.ExternalProviderUnavailableException.class);
-        verify(deliveries).complete("full-queue", "FAILED", "WEBHOOK_QUEUE_FULL", "Webhook processing capacity is currently exhausted.");
-        when(deliveries.accept(any(), any(), any(), any(), any()))
+        assertThat(rejecting.receive("workflow_run", "full-queue", sign(body), body).status()).isEqualTo("ACCEPTED");
+        verify(deliveries, never()).complete(any(),any(),any(),any());
+        when(deliveries.acceptWorkflow(any()))
                 .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("database unavailable"));
         assertThatThrownBy(() -> service.receive("workflow_run", "database-down", sign(body), body))
                 .isInstanceOf(org.springframework.dao.DataAccessResourceFailureException.class);
