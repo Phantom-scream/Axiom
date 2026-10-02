@@ -5,6 +5,10 @@ Repository tested: [Phantom-scream/Axiom](https://github.com/Phantom-scream/Axio
 
 ## Verdict
 
+The follow-up diagnostic campaign below supersedes the diagnostic-quality findings of the initial
+campaign. Overall acceptance remains **PARTIAL**, because the disposable PR and same-SHA rerun
+require user actions that the current PAT cannot perform. No live PR publication is claimed.
+
 **PARTIAL acceptance overall; PASS for the exercised read-only backend integration after one fix.**
 Real GitHub authentication, workflow/job/log ingestion, analysis orchestration, comparison mapping,
 persisted retrieval, bounded historical APIs and idempotency worked. Triage usefulness was limited
@@ -172,3 +176,118 @@ No tests were disabled or weakened. `.env` and runtime raw logs are excluded fro
 No algorithm tuning, new feature, credential workaround, external publication or repository-setting
 change was introduced. The live read-only foundation passes; broad v1 diagnostic quality and live
 write/webhook acceptance should not be claimed from this narrow dataset.
+
+## Follow-up diagnostic campaign (2026-10-02)
+
+Starting commit: `71fd4945af19555be4106cb36ea9eb44645ac0c5`. The 197-test baseline, formatting
+and build passed before edits. Main was clean, `.env` remained ignored/untracked, operator security
+was enabled, and automatic publication remained disabled. This section records actual follow-up
+results, not replacement or fabricated results for the initial campaign.
+
+### Demonstrated Spring diagnostic defect and narrow repair
+
+The real Gradle log supplied indented condensed cause lines of the form
+`Caused by: org.springframework.beans.factory.NoSuchBeanDefinitionException at DefaultListableBeanFactory.java:2304`,
+preceded by several `UnsatisfiedDependencyException` wrappers. Indentation prevented the existing
+multiline cause join, and the condensed `Exception at ...` format lacked the colon required by the
+extractor's exception rule. As a result, only generic build/exit symptoms survived extraction.
+
+The repair joins indented causes through the existing normalizer and recognizes the deepest cause
+in the observed condensed format. The existing SHA-256 fingerprinter remains unchanged; the
+condensed root identity excludes wrapper test names and volatile source coordinates. Raw cause
+context is retained internally, not published. Because the condensed log omits the missing bean's
+identity, this fingerprint describes the available exception signal, not a proven unique root cause.
+The observed `NoSuchBeanDefinitionException` contributes to the existing missing-configuration
+rule and weight. No category, scoring threshold, rerun rule or triage ranking rule was added.
+An `UnsatisfiedDependencyException` wrapper alone remains UNKNOWN.
+
+All five affected real runs in the registry above were recomputed with `recompute=true`. Each
+returned 200 with no FAILED stages. Each now selects the specific missing-bean exception as PRIMARY,
+CONFIGURATION_FAILURE (importance 0.84), with INSPECT_CONFIGURATION as its first action. Generic
+build/exit entries remain DOWNSTREAM. In run 36319285564 the specific signal starts at log line 215,
+before the generic build failure at line 243. Rerun guidance remains INSUFFICIENT_EVIDENCE: a missing
+bean is not evidence of a transient recovery. The shared root fingerprint is
+`bb7f3a0f3cb45b37fd08a4daed17bee7750609ac0d6b06d52bb692d9c7c7f6b4`.
+
+### Controlled real JUnit failure and correlation
+
+A separate worktree and disposable branch, `validation/axiom-v1-acceptance-20261002`, contain commit
+`5f3cce9e3494680675a71d647064c2f6b74c8803`. It adds a clearly labelled acceptance test, full Gradle
+failure logging and a one-day JUnit artifact. The controlled test fails only on GitHub attempt 1 and
+passes on later attempts of the same SHA. **These intentionally failing changes are not on main;
+the branch must not be merged.**
+
+Actual push run [37058915055](https://github.com/Phantom-scream/Axiom/actions/runs/37058915055),
+attempt 1, completed FAILURE with the controlled AssertionError. Its Axiom pipeline is
+`cd16459a-35b5-4989-83e7-e4d4b832007b`. GitHub artifact `11249797817`,
+`axiom-controlled-junit-1`, supplied the actual Gradle JUnit XML. The existing XML ingestion endpoint
+returned 201: one failed execution, no passes/skips/errors. No synthetic XML or attempt was substituted.
+
+Explicit correlation returned one STRONG match, zero EXACT matches and zero uncorrelated failures.
+The unique same-run candidate has the matching normalized assertion message and exception type;
+the log's stack context and XML's message produce different fingerprints, so EXACT is not claimed.
+Stable test ID: `de165b3afc52bcae3a1acd0e5a1e987172b36f14c764f08674a336c78384a468`.
+Execution retrieval returned the real FAILED execution and persisted STRONG link. Recomputing after
+report ingestion produced PRIMARY TEST_FAILURE, one correlated test and INSPECT_TEST.
+Stability correctly remains INSUFFICIENT_HISTORY. `recompute=false` had reused the earlier triage;
+explicit recomputation was used to incorporate the newly uploaded report.
+
+### Follow-up acceptance matrix
+
+All rows use Phantom-scream/Axiom. Pipeline identities for the five Spring runs remain those in the
+initial registry; the controlled run's identity is recorded above.
+
+| Scenario | Real run | Observed result | Status |
+| --- | --- | --- | --- |
+| Spring context failure before repair | 36319285564 and four other failed runs | Generic UNKNOWN symptoms; no primary/actions | FAIL diagnostic quality; original backend integration PASS |
+| Spring context failure after repair | Same five real runs | Missing-bean PRIMARY; CONFIGURATION_FAILURE; INSPECT_CONFIGURATION; generic symptoms DOWNSTREAM | PASS |
+| Deterministic JUnit failure | 37058915055 / attempt 1 | Actual AssertionError; PRIMARY TEST_FAILURE; INSPECT_TEST | PASS |
+| Structured test-to-failure correlation | 37058915055 / attempt 1 | Actual artifact XML; one persisted justified STRONG match; stable execution history readable | PASS |
+| Failed PR comparison/relevance | No controlled PR run yet | Disposable branch exists; PR creation returned GitHub 403 | NOT_VALIDATED_CREDENTIAL_LIMITATION |
+| PR comment create | No controlled PR yet | No unrelated PR was used; no comment created | NOT_VALIDATED_CREDENTIAL_LIMITATION |
+| PR comment update | No controlled PR yet | No comment exists to update | NOT_VALIDATED_CREDENTIAL_LIMITATION |
+| Same-SHA fail-to-pass rerun | 37058915055 / attempt 1 only | Rerun request returned GitHub 403; no second attempt exists | NOT_VALIDATED_CREDENTIAL_LIMITATION |
+| Live GitHub Check | None | Known PAT Checks permission/type limitation; mock coverage only | NOT_VALIDATED_CREDENTIAL_LIMITATION |
+| GitHub-delivered webhook | None | No public HTTPS endpoint/trusted installed tunnel available | NOT_VALIDATED_INFRASTRUCTURE |
+
+The PAT can read the branch/run/artifact but cannot create pull requests or rerun Actions: each
+attempt returned 403 `Resource not accessible by personal access token`. These are external
+permission gates, not evidence of application defects or failure of Issues-write permission.
+The user was asked to create the disposable draft PR and manually rerun the exact workflow. This
+campaign did not broaden token permissions, use an unrelated PR, change webhook settings, or
+install networking software. After those manual actions, the existing APIs can exercise the remaining
+PR comparison, publication create/update and same-SHA transition gates.
+
+An existing signed-in browser was inspected as an alternative to changing PAT permissions. Its
+initial token-settings accessibility snapshot unexpectedly contained a displayed token. The user was
+notified to rotate that token; it was not copied, used, or added to repository files. Subsequent browser
+observations were redacted. Browser interaction became unavailable before PR creation, so this
+attempt supplies no additional live acceptance evidence. Rotation remains a user-controlled action.
+
+### Historical revalidation
+
+All six bounded historical views returned 200 after ingestion of the controlled run. The window now
+contains nine real runs: three successes, six failures, success rate 1/3. Classification counts include
+five CONFIGURATION_FAILURE entries and one TEST_FAILURE, while retained generic symptoms remain
+UNKNOWN. The missing-bean incident has ten extracted occurrences across five affected runs;
+the controlled test incident contains its actual stableTestId. Weekly trends include the new failure.
+The unstable-test leaderboard is correctly empty with only one execution and insufficient history.
+Hotspots still reflect only the previously ingested PR comparison; the controlled push has no reliable
+base and was not given a fabricated comparison. GitHub request metric samples were unchanged
+across the complete historical GET sequence, confirming no outbound provider calls.
+
+### Regression and deployment verification
+
+Three regression tests cover the sanitized observed cause chain, deepest-cause extraction and
+fingerprint stability, existing classification/ranking/action behavior, and conservative UNKNOWN
+behavior for the wrapper alone. The fixture contains only a short sanitized excerpt, not a raw log dump.
+All 197 original tests plus these tests pass: **200 tests, zero failures/errors/skips**. Formatting,
+full clean Testcontainers tests, build, Compose configuration and Docker build pass. PostgreSQL 17
+applies the unchanged Flyway V1–V14 chain. The rebuilt image was used for actual Spring recomputation
+and JUnit ingestion. No tests were weakened, no migration was needed, and no failing validation
+code or credentials were added to main.
+
+**Final verdict: PARTIAL unrestricted v1 acceptance.** The demonstrated diagnostic defect is repaired
+and live structured-test correlation is proven. Failed-PR relevance, PR write create/update and
+same-SHA rerun remain permission-gated; GitHub-delivered webhook automation remains infrastructure-
+gated. Neither live publication success nor unrestricted acceptance is claimed.

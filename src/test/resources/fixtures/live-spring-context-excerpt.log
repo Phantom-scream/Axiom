@@ -1,0 +1,10 @@
+2026-09-27T12:33:46.4087788Z AxiomApplicationTests > initializationError FAILED
+2026-09-27T12:33:46.4118052Z     java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:195
+2026-09-27T12:33:46.4147811Z         Caused by: org.springframework.beans.factory.UnsatisfiedDependencyException at ConstructorResolver.java:804
+2026-09-27T12:33:46.4237484Z                         Caused by: org.springframework.beans.factory.NoSuchBeanDefinitionException at DefaultListableBeanFactory.java:2304
+2026-09-27T12:33:47.3997225Z
+2026-09-27T12:33:47.4000000Z HealthControllerTest > initializationError FAILED
+2026-09-27T12:33:47.4100000Z     java.lang.IllegalStateException at DefaultCacheAwareContextLoaderDelegate.java:195
+2026-09-27T12:33:47.4200000Z         Caused by: org.springframework.beans.factory.NoSuchBeanDefinitionException at DefaultListableBeanFactory.java:2304
+2026-09-27T12:33:48.0000000Z BUILD FAILED in 44s
+2026-09-27T12:33:49.0000000Z ##[error]Process completed with exit code 1.
