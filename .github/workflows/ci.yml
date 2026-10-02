@@ -15,4 +15,12 @@ jobs:
       - uses: gradle/actions/wrapper-validation@v4
       - run: ./gradlew spotlessCheck
       - run: ./gradlew test
+        env:
+          AXIOM_CONTROLLED_ACCEPTANCE: "true"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: axiom-controlled-junit-${{ github.run_attempt }}
+          path: build/test-results/test/TEST-com.axiom.ControlledAcceptanceTest.xml
+          retention-days: 1
       - run: ./gradlew build

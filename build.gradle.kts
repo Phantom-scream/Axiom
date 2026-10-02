@@ -50,3 +50,11 @@ spotless {
     endWithNewline()
   }
 }
+
+// Disposable acceptance branch: expose actual JUnit exception details in the CI log.
+tasks.withType<Test>().configureEach {
+  testLogging {
+    exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    events("failed")
+  }
+}
